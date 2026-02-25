@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { X, ClipboardList, Share2, Save, Check } from "lucide-react";
+import { X, ClipboardList, Share2, Loader2 } from "lucide-react";
 import { generateNotaPedidoText, planToText, formatARS } from "./utils";
 import type { ClientRecord } from "@/lib/types";
 
@@ -55,8 +55,8 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
     const [clients, setClients] = useState<ClientRecord[]>([]);
     const [clientSearch, setClientSearch] = useState("");
     const [showDropdown, setShowDropdown] = useState(false);
-    const [saved, setSaved] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [submitError, setSubmitError] = useState("");
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -83,8 +83,19 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
         }
     }, [calc.planStats, selectedPlanId]);
 
+    const selectedPlan = calc.planStats.find(p => p.id === selectedPlanId);
+
+    const getAnticipoFinal = useCallback((plan: any | undefined): number => {
+        const anticipoManual = Math.max(0, Number(calc.anticipo) || 0);
+        const cuotaComoAnticipo = plan?.primeraCuotaPaga ? Math.max(0, Number(plan.cuota) || 0) : 0;
+        return anticipoManual + cuotaComoAnticipo;
+    }, [calc.anticipo]);
+
+    const anticipoFinal = getAnticipoFinal(selectedPlan);
+
     useEffect(() => {
-        setFichaText(generateNotaPedidoText(calc, {
+        const calcForText = { ...calc, anticipo: anticipoFinal };
+        setFichaText(generateNotaPedidoText(calcForText, {
             vendedor,
             zona: form.zona,
             cliente: form.cliente,
@@ -97,7 +108,7 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
             domPar: form.domPar,
             selectedPlanId,
         }));
-    }, [calc, form, vendedor, selectedPlanId]);
+    }, [calc, anticipoFinal, form, vendedor, selectedPlanId]);
 
     useEffect(() => {
         try { localStorage.setItem(FORM_KEY, JSON.stringify(form)); } catch { /* ignore */ }
@@ -165,51 +176,76 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
         setShowDropdown(value.length >= 2);
     };
 
-    const selectedPlan = calc.planStats.find(p => p.id === selectedPlanId);
+    const buildRegistrationBody = useCallback(() => {
+        const planText = selectedPlan ? planToText(selectedPlan) : "";
+        const totalText = selectedPlan
+            ? formatARS(selectedPlan.primeraCuotaPaga ? selectedPlan.saldo : selectedPlan.calcTotal)
+            : "";
 
-    const handleSave = async () => {
-        if (!form.cliente.trim()) return;
+        return {
+            vendedor,
+            zona: form.zona,
+            cliente: form.cliente,
+            nroCliente: form.nroCliente,
+            dni: form.dni,
+            telefono: form.telefono,
+            localidad: form.localidad,
+            rubro: form.rubro,
+            domCom: form.domCom,
+            domPar: form.domPar,
+            productos: calc.itemsText,
+            planes: planText,
+            anticipo: anticipoFinal > 0 ? formatARS(anticipoFinal) : "",
+            total: totalText,
+            conyugue: form.conyugue,
+            dniConyugue: form.dniConyugue,
+            telConyugue: form.telConyugue,
+            observaciones: form.observaciones,
+        };
+    }, [selectedPlan, vendedor, form, calc.itemsText, anticipoFinal]);
+
+    const saveRegistration = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
+        if (!form.cliente.trim()) {
+            return { success: false, error: "Completá el cliente antes de enviar." };
+        }
+
         setSaving(true);
+        setSubmitError("");
         try {
-            const planText = selectedPlan ? planToText(selectedPlan) : "";
-            const totalText = selectedPlan
-                ? formatARS(selectedPlan.primeraCuotaPaga ? selectedPlan.saldo : selectedPlan.calcTotal)
-                : "";
-            const body = {
-                vendedor,
-                zona: form.zona,
-                cliente: form.cliente,
-                nroCliente: form.nroCliente,
-                dni: form.dni,
-                telefono: form.telefono,
-                localidad: form.localidad,
-                rubro: form.rubro,
-                domCom: form.domCom,
-                domPar: form.domPar,
-                productos: calc.itemsText,
-                planes: planText,
-                anticipo: calc.anticipo > 0 ? formatARS(calc.anticipo) : "",
-                total: totalText,
-                conyugue: form.conyugue,
-                dniConyugue: form.dniConyugue,
-                telConyugue: form.telConyugue,
-                observaciones: form.observaciones,
-            };
+            const body = buildRegistrationBody();
             const res = await fetch("/api/registrations", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(body),
             });
             const json = await res.json();
-            if (json.success) {
-                setSaved(true);
-                setForm(emptyForm());
-                setClientSearch("");
-                localStorage.removeItem(FORM_KEY);
-                setTimeout(() => setSaved(false), 3000);
+            if (!res.ok || !json.success) {
+                return { success: false, error: json.error || "No se pudo guardar el registro." };
             }
-        } catch { /* ignore */ } finally {
+            return { success: true };
+        } catch {
+            return { success: false, error: "Error de red al guardar el registro." };
+        } finally {
             setSaving(false);
+        }
+    }, [form.cliente, buildRegistrationBody]);
+
+    const handleWhatsAppSend = async () => {
+        const waUrl = `https://wa.me/?text=${encodeURIComponent(fichaText)}`;
+        const waWindow = window.open("", "_blank");
+        const result = await saveRegistration();
+
+        if (!result.success) {
+            if (waWindow && !waWindow.closed) waWindow.close();
+            setSubmitError(result.error || "No se pudo guardar el registro.");
+            return;
+        }
+
+        setSubmitError("");
+        if (waWindow) {
+            waWindow.location.href = waUrl;
+        } else {
+            window.location.href = waUrl;
         }
     };
 
@@ -334,14 +370,9 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
                             <textarea value={form.observaciones} onChange={e => setField("observaciones", e.target.value)} rows={2} className={`${inp} resize-none`} />
                         </div>
 
-                        {/* Guardar */}
-                        <button
-                            onClick={handleSave}
-                            disabled={!form.cliente.trim() || saving}
-                            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl text-sm transition-colors"
-                        >
-                            {saved ? <><Check className="w-4 h-4" /> ¡Guardado!</> : saving ? "Guardando..." : <><Save className="w-4 h-4" /> Guardar Registro</>}
-                        </button>
+                        <p className="text-[11px] text-neutral-500">
+                            El registro y el cliente se guardan automaticamente al enviar por WhatsApp.
+                        </p>
                     </div>
 
                     {/* Right: plan selector + preview */}
@@ -385,12 +416,19 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
                                     <ClipboardList className="w-3.5 h-3.5" /> Copiar
                                 </button>
                                 <button
-                                    onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(fichaText)}`, "_blank")}
-                                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-medium transition-colors"
+                                    onClick={handleWhatsAppSend}
+                                    disabled={saving || !form.cliente.trim()}
+                                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl text-xs font-medium transition-colors"
                                 >
-                                    <Share2 className="w-3.5 h-3.5" /> WhatsApp
+                                    {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Share2 className="w-3.5 h-3.5" />}
+                                    {saving ? "Guardando..." : "WhatsApp"}
                                 </button>
                             </div>
+                            {submitError && (
+                                <p className="text-[11px] text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg px-2.5 py-2">
+                                    {submitError}
+                                </p>
+                            )}
                         </div>
                     </div>
                 </div>
