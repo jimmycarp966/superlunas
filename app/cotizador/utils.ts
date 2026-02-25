@@ -8,8 +8,9 @@ export function calcPlanStats(subtotal: number, anticipo: number, plans: any[], 
     const rdTotal = settings?.redondeoTotal ?? 2;
     const rdCuota = settings?.redondeoCuota ?? 2;
     return plans.map(p => {
-        let calcTotal = subtotal;
-        if (p.tasaPorcentaje > 0) calcTotal = subtotal * (1 + p.tasaPorcentaje / 100);
+        const rawRate = Number(p.tasaPorcentaje);
+        const rate = Number.isFinite(rawRate) ? rawRate : 0;
+        let calcTotal = subtotal * (1 + rate / 100);
         calcTotal = round(calcTotal, rdTotal);
         const saldo = Math.max(0, calcTotal - anticipo);
         const cuota = p.semanas > 0 ? round(saldo / p.semanas, rdCuota) : saldo;
