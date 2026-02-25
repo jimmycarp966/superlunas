@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import {
     Settings, RefreshCw, Upload, Lock, FileText,
     CheckCircle, AlertTriangle, Database, CreditCard,
@@ -38,9 +38,16 @@ export default function AdminPanel() {
     const [clientsFile, setClientsFile] = useState<File | null>(null);
     const clientsFileRef = useRef<HTMLInputElement>(null);
     const [loadingClientsUpload, setLoadingClientsUpload] = useState(false);
-    const [clientsCount, setClientsCount] = useState<number | null>(null);
-    const [clientsPreview, setClientsPreview] = useState<any[]>([]);
+    const [allClients, setAllClients] = useState<any[]>([]);
+    const [clientsSearch, setClientsSearch] = useState("");
+    const [clientsPage, setClientsPage] = useState(0);
     const [loadingClients, setLoadingClients] = useState(false);
+
+    // Catálogo - borrar
+    const [clearingCatalog, setClearingCatalog] = useState(false);
+    const [confirmClear, setConfirmClear] = useState(false);
+
+    const CLIENTS_PER_PAGE = 50;
 
     useEffect(() => {
         fetchStatus();
@@ -97,9 +104,31 @@ export default function AdminPanel() {
         try {
             const res = await fetch("/api/clients");
             const json = await res.json();
-            if (json.success) setClientsPreview(json.data.slice(0, 10));
+            if (json.success) {
+                setAllClients(json.data);
+                setClientsPage(0);
+            }
         } catch { } finally {
             setLoadingClients(false);
+        }
+    };
+
+    const handleClearCatalog = async () => {
+        setClearingCatalog(true);
+        try {
+            const res = await fetch("/api/source/refresh", { method: "DELETE" });
+            const data = await res.json();
+            if (data.success) {
+                setSourceStatus(null);
+                setConfirmClear(false);
+                showToast("success", "Catálogo eliminado correctamente");
+            } else {
+                showToast("error", data.error || "Error al eliminar el catálogo");
+            }
+        } catch {
+            showToast("error", "Error de conexión");
+        } finally {
+            setClearingCatalog(false);
         }
     };
 
@@ -211,11 +240,10 @@ export default function AdminPanel() {
             const res = await fetch("/api/clients", { method: "POST", body: formData });
             const data = await res.json();
             if (data.success) {
-                showToast("success", `${data.count} clientes cargados correctamente`);
-                setClientsCount(data.count);
                 setClientsFile(null);
                 if (clientsFileRef.current) clientsFileRef.current.value = "";
                 await fetchClientsPreview();
+                showToast("success", `${data.count} clientes cargados correctamente`);
             } else {
                 showToast("error", data.error || "Error al subir el archivo");
             }
@@ -241,6 +269,20 @@ export default function AdminPanel() {
             return iso;
         }
     };
+
+    const filteredClients = useMemo(() => {
+        const q = clientsSearch.toLowerCase().trim();
+        if (!q) return allClients;
+        return allClients.filter(c =>
+            c.nombre?.toLowerCase().includes(q) ||
+            c.dni?.toLowerCase().includes(q) ||
+            c.localidad?.toLowerCase().includes(q) ||
+            c.zona?.toLowerCase().includes(q)
+        );
+    }, [allClients, clientsSearch]);
+
+    const totalClientPages = Math.ceil(filteredClients.length / CLIENTS_PER_PAGE);
+    const paginatedClients = filteredClients.slice(clientsPage * CLIENTS_PER_PAGE, (clientsPage + 1) * CLIENTS_PER_PAGE);
 
     return (
         <div className="min-h-screen bg-neutral-950 text-neutral-200">
@@ -372,6 +414,42 @@ export default function AdminPanel() {
                                     </div>
                                 ) : (
                                     <p className="text-neutral-500 text-sm">Sin datos en caché todavía.</p>
+                                )}
+                            </div>
+
+                            {/* Borrar catálogo */}
+                            <div className="bg-neutral-900 border border-red-900/30 rounded-2xl p-5">
+                                <h3 className="font-semibold text-white mb-1">Borrar catálogo actual</h3>
+                                <p className="text-neutral-500 text-sm mb-4">
+                                    Elimina el catálogo en memoria. Los productos no estarán disponibles hasta que se suba una nueva lista.
+                                </p>
+                                {!confirmClear ? (
+                                    <button
+                                        onClick={() => setConfirmClear(true)}
+                                        disabled={!sourceStatus || sourceStatus.status !== "ready"}
+                                        className="flex items-center gap-2 px-4 py-2 bg-red-900/30 hover:bg-red-900/50 border border-red-800/50 text-red-400 hover:text-red-300 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl text-sm font-medium transition-colors"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                        Borrar catálogo
+                                    </button>
+                                ) : (
+                                    <div className="flex items-center gap-3">
+                                        <p className="text-red-400 text-sm font-medium">¿Confirmar borrado?</p>
+                                        <button
+                                            onClick={handleClearCatalog}
+                                            disabled={clearingCatalog}
+                                            className="flex items-center gap-2 px-3 py-1.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors"
+                                        >
+                                            {clearingCatalog ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                                            Sí, borrar
+                                        </button>
+                                        <button
+                                            onClick={() => setConfirmClear(false)}
+                                            className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded-lg text-sm transition-colors"
+                                        >
+                                            Cancelar
+                                        </button>
+                                    </div>
                                 )}
                             </div>
 
@@ -793,18 +871,25 @@ export default function AdminPanel() {
                                     </button>
                                 )}
 
-                                {clientsCount !== null && (
+                                {allClients.length > 0 && (
                                     <div className="mt-3 flex items-center gap-2 text-sm text-emerald-400">
                                         <CheckCircle className="w-4 h-4" />
-                                        {clientsCount} clientes cargados en memoria
+                                        {allClients.length} clientes en memoria
                                     </div>
                                 )}
                             </div>
 
-                            {/* Preview */}
+                            {/* Lista completa */}
                             <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-5">
                                 <div className="flex items-center justify-between mb-4">
-                                    <h3 className="font-semibold text-white">Primeros clientes cargados</h3>
+                                    <div className="flex items-center gap-3">
+                                        <h3 className="font-semibold text-white">Clientes en memoria</h3>
+                                        {allClients.length > 0 && (
+                                            <span className="text-xs bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded-full">
+                                                {filteredClients.length} / {allClients.length}
+                                            </span>
+                                        )}
+                                    </div>
                                     <button
                                         onClick={fetchClientsPreview}
                                         disabled={loadingClients}
@@ -820,31 +905,75 @@ export default function AdminPanel() {
                                         <Loader2 className="w-4 h-4 animate-spin" />
                                         Cargando...
                                     </div>
-                                ) : clientsPreview.length === 0 ? (
+                                ) : allClients.length === 0 ? (
                                     <p className="text-neutral-500 text-sm">Sin clientes cargados. Sube el archivo Excel primero.</p>
                                 ) : (
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-sm">
-                                            <thead>
-                                                <tr className="border-b border-neutral-800">
-                                                    <th className="text-left px-3 py-2 text-neutral-500 font-medium text-xs">Nombre</th>
-                                                    <th className="text-left px-3 py-2 text-neutral-500 font-medium text-xs">DNI</th>
-                                                    <th className="text-left px-3 py-2 text-neutral-500 font-medium text-xs">Teléfono</th>
-                                                    <th className="text-left px-3 py-2 text-neutral-500 font-medium text-xs">Localidad</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {clientsPreview.map((c, i) => (
-                                                    <tr key={i} className="border-b border-neutral-800/60 hover:bg-neutral-800/30">
-                                                        <td className="px-3 py-2 text-white font-medium">{c.nombre}</td>
-                                                        <td className="px-3 py-2 text-neutral-400">{c.dni || "—"}</td>
-                                                        <td className="px-3 py-2 text-neutral-400">{c.telefono || "—"}</td>
-                                                        <td className="px-3 py-2 text-neutral-400">{c.localidad || "—"}</td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
+                                    <>
+                                        <div className="mb-4">
+                                            <input
+                                                type="text"
+                                                value={clientsSearch}
+                                                onChange={(e) => { setClientsSearch(e.target.value); setClientsPage(0); }}
+                                                placeholder="Buscar por nombre, DNI, localidad o zona..."
+                                                className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500 placeholder:text-neutral-500"
+                                            />
+                                        </div>
+
+                                        {paginatedClients.length === 0 ? (
+                                            <p className="text-neutral-500 text-sm py-4 text-center">Sin resultados para esa búsqueda.</p>
+                                        ) : (
+                                            <div className="overflow-x-auto">
+                                                <table className="w-full text-sm">
+                                                    <thead>
+                                                        <tr className="border-b border-neutral-800">
+                                                            <th className="text-left px-3 py-2 text-neutral-500 font-medium text-xs">Nombre</th>
+                                                            <th className="text-left px-3 py-2 text-neutral-500 font-medium text-xs">DNI</th>
+                                                            <th className="text-left px-3 py-2 text-neutral-500 font-medium text-xs">Teléfono</th>
+                                                            <th className="text-left px-3 py-2 text-neutral-500 font-medium text-xs">Localidad</th>
+                                                            <th className="text-left px-3 py-2 text-neutral-500 font-medium text-xs">Zona</th>
+                                                            <th className="text-left px-3 py-2 text-neutral-500 font-medium text-xs">N° Cliente</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {paginatedClients.map((c, i) => (
+                                                            <tr key={i} className="border-b border-neutral-800/60 hover:bg-neutral-800/30">
+                                                                <td className="px-3 py-2 text-white font-medium">{c.nombre}</td>
+                                                                <td className="px-3 py-2 text-neutral-400">{c.dni || "—"}</td>
+                                                                <td className="px-3 py-2 text-neutral-400">{c.telefono || "—"}</td>
+                                                                <td className="px-3 py-2 text-neutral-400">{c.localidad || "—"}</td>
+                                                                <td className="px-3 py-2 text-neutral-400">{c.zona || "—"}</td>
+                                                                <td className="px-3 py-2 text-neutral-400">{c.nroCliente || "—"}</td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        )}
+
+                                        {totalClientPages > 1 && (
+                                            <div className="flex items-center justify-between mt-4 pt-4 border-t border-neutral-800">
+                                                <p className="text-xs text-neutral-500">
+                                                    Página {clientsPage + 1} de {totalClientPages} · {filteredClients.length} clientes
+                                                </p>
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        onClick={() => setClientsPage(p => Math.max(0, p - 1))}
+                                                        disabled={clientsPage === 0}
+                                                        className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 disabled:opacity-30 text-white text-xs rounded-lg transition-colors"
+                                                    >
+                                                        ← Anterior
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setClientsPage(p => Math.min(totalClientPages - 1, p + 1))}
+                                                        disabled={clientsPage >= totalClientPages - 1}
+                                                        className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 disabled:opacity-30 text-white text-xs rounded-lg transition-colors"
+                                                    >
+                                                        Siguiente →
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </>
                                 )}
                             </div>
                         </div>

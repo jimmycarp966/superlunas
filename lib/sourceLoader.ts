@@ -33,76 +33,152 @@ const parsePdfBuffer = async (buffer: Buffer): Promise<Product[]> => {
     return new Promise((resolve) => {
         const pdfParser = new PDFParser();
 
-        pdfParser.on("pdfParser_dataError", (errData: any) => {
-            console.error("Error parseando PDF:", errData.parserError);
-            resolve([]);
-        });
+        pdfParser.on("pdfParser_dataError", () => resolve([]));
 
         pdfParser.on("pdfParser_dataReady", (pdfData: any) => {
             const products: Product[] = [];
 
-            // Recorrer todas las páginas
+            // Posiciones X de cada columna detectadas desde la cabecera
+            let headerCols: { codigo: number; nombre: number; precio: number; stock: number | null } | null = null;
+
             for (const page of pdfData.Pages || []) {
                 const texts = page.Texts || [];
 
-                // Agrupar elementos por línea (coordenada Y redondeada)
-                const linesMap = new Map<number, { x: number, text: string }[]>();
+                // Agrupar elementos por línea (coordenada Y redondeada a 1 decimal)
+                const linesMap = new Map<number, { x: number; text: string }[]>();
 
                 for (const t of texts) {
-                    const y = Math.round(t.y * 10) / 10; // Redondear a 1 decimal aproxima lineas visuales
+                    const y = Math.round(t.y * 10) / 10;
                     const txt = decodeURIComponent(t.R[0].T).trim();
                     if (!txt) continue;
-
                     if (!linesMap.has(y)) linesMap.set(y, []);
                     linesMap.get(y)!.push({ x: t.x, text: txt });
                 }
 
-                // Para cada línea, ordenar por X y extraer datos
                 const yKeys = Array.from(linesMap.keys()).sort((a, b) => a - b);
 
                 for (const y of yKeys) {
                     const items = linesMap.get(y)!.sort((a, b) => a.x - b.x);
+                    if (items.length < 2) continue;
 
-                    // Necesitamos al menos Código, Nombre y Precio
-                    if (items.length >= 3) {
-                        // Basado en el volcado:
-                        // items[0] suele ser Codigo (x ~ 5)
-                        // items[1] suele ser Nombre (x ~ 7)
-                        // items[...] el último elemento numérico suele ser el precio (x ~ 28 o 30)
+                    // Intentar detectar fila de cabecera (solo una vez)
+                    if (!headerCols) {
+                        const lowered = items.map(i => i.text.toLowerCase());
+                        const hasCodigo = lowered.some(t => t.includes("cod"));
+                        const hasNombre = lowered.some(t => t.includes("nombre") || t.includes("descripci"));
+                        const hasPrecio = lowered.some(t => t.includes("precio") || t.includes("importe"));
 
+                        if (hasCodigo && hasNombre && hasPrecio) {
+                            const cItem = items.find(i => i.text.toLowerCase().includes("cod"));
+                            const nItem = items.find(i => {
+                                const t = i.text.toLowerCase();
+                                return t.includes("nombre") || t.includes("descripci");
+                            });
+                            const pItem = items.find(i => {
+                                const t = i.text.toLowerCase();
+                                return t.includes("precio") || t.includes("importe");
+                            });
+                            const sItem = items.find(i => i.text.toLowerCase().includes("stock"));
+
+                            if (cItem && nItem && pItem) {
+                                headerCols = {
+                                    codigo: cItem.x,
+                                    nombre: nItem.x,
+                                    precio: pItem.x,
+                                    stock: sItem ? sItem.x : null,
+                                };
+                            }
+                            continue;
+                        }
+                    }
+
+                    if (items.length < 3) continue;
+
+                    if (headerCols) {
+                        // Asignar cada elemento al header más cercano por distancia X
+                        const codigoItems: string[] = [];
+                        const nombreItems: string[] = [];
+                        const precioItems: string[] = [];
+                        const stockItems: string[] = [];
+
+                        for (const item of items) {
+                            const candidates: { col: string; d: number }[] = [
+                                { col: "codigo", d: Math.abs(item.x - headerCols.codigo) },
+                                { col: "nombre", d: Math.abs(item.x - headerCols.nombre) },
+                                { col: "precio", d: Math.abs(item.x - headerCols.precio) },
+                            ];
+                            if (headerCols.stock !== null) {
+                                candidates.push({ col: "stock", d: Math.abs(item.x - headerCols.stock) });
+                            }
+                            const nearest = candidates.reduce((a, b) => a.d < b.d ? a : b);
+                            if (nearest.col === "codigo") codigoItems.push(item.text);
+                            else if (nearest.col === "nombre") nombreItems.push(item.text);
+                            else if (nearest.col === "precio") precioItems.push(item.text);
+                            else stockItems.push(item.text);
+                        }
+
+                        const codigo = codigoItems.join("").trim();
+                        const nombre = nombreItems.join(" ").trim();
+                        const rawPrecio = precioItems.find(p => /\d/.test(p)) || "0";
+                        const stockRaw = stockItems.length > 0 ? parseInt(stockItems[0]) : NaN;
+                        const stock = !isNaN(stockRaw) && stockRaw >= 0 ? stockRaw : 100;
+
+                        if (codigo && /^[a-zA-Z0-9-]{2,}$/.test(codigo) && nombre) {
+                            products.push({
+                                codigo,
+                                nombre,
+                                precio: normalizePrice(rawPrecio),
+                                stock,
+                                lista: "local",
+                            });
+                        }
+                    } else {
+                        // Heurística de fallback sin header detectado
                         const codigo = items[0].text;
-                        const nombre = items[1].text;
 
-                        // Ignoramos la cabecera
-                        if (codigo.toLowerCase().includes("codigo")) continue;
+                        // Saltar cabeceras y totales
+                        const codigoL = codigo.toLowerCase();
+                        if (codigoL.includes("cod") || codigoL.includes("lista") || codigoL.includes("total")) continue;
 
-                        // Buscamos el precio (el item más a la derecha que parezca número/precio)
-                        // Generalmente items.length - 1 o -2 (si hay un stock/lista suelto al final)
+                        // Precio: número más a la derecha (de atrás hacia adelante)
                         let rawPrecio = "0";
-                        for (let i = items.length - 1; i >= 1; i--) {
-                            // Si tiene formato de numero de precio ej 435.999
+                        let precioIdx = -1;
+                        for (let i = items.length - 1; i >= 2; i--) {
                             const clean = items[i].text.replace(/[^\d.,]/g, "");
-                            if (clean.length > 0 && /\d/.test(clean)) {
+                            if (clean.length >= 2 && /^\d/.test(clean)) {
                                 rawPrecio = items[i].text;
-                                // Si casualmente agarramos el simbolo $ o la palabra LISTA, seguimos iterando
-                                if (rawPrecio === "$" || rawPrecio.toLowerCase() === "lista") continue;
+                                precioIdx = i;
                                 break;
                             }
                         }
 
-                        // Verificación basica: que el codigo se parezca a un codigo (al menos 3 numeros u letras)
-                        if (/^[a-zA-Z0-9-]{3,}$/.test(codigo)) {
+                        // Stock: entero pequeño a la derecha del precio
+                        let stock = 100;
+                        for (let i = precioIdx + 1; i < items.length; i++) {
+                            const n = parseInt(items[i].text);
+                            if (!isNaN(n) && n >= 0 && n <= 9999) {
+                                stock = n;
+                                break;
+                            }
+                        }
+
+                        // Nombre: unir todos los elementos entre codigo (idx 0) y precio
+                        const endNombre = precioIdx > 0 ? precioIdx : items.length - 1;
+                        const nombre = items.slice(1, endNombre).map(i => i.text).join(" ").trim();
+
+                        if (/^[a-zA-Z0-9-]{3,}$/.test(codigo) && nombre) {
                             products.push({
-                                codigo: codigo,
-                                nombre: nombre,
+                                codigo,
+                                nombre,
                                 precio: normalizePrice(rawPrecio),
-                                stock: 100,
-                                lista: "local"
+                                stock,
+                                lista: "local",
                             });
                         }
                     }
                 }
             }
+
             resolve(products);
         });
 
