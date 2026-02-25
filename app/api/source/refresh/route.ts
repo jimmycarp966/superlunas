@@ -31,7 +31,6 @@ export async function DELETE(request: NextRequest) {
         const auth = await verifyAuth(token);
         if (auth.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-        global.catalogCache = undefined;
         await supabase.from("products").delete().neq("codigo", "");
         return NextResponse.json({ success: true });
     } catch (error: any) {
@@ -47,17 +46,21 @@ export async function GET(request: NextRequest) {
         const auth = await verifyAuth(token);
         if (auth.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-        const cache = global.catalogCache;
-        if (!cache) {
-            return NextResponse.json({ success: true, sourceVersion: "none", updatedAt: 0, status: "empty" });
+        const { count, error } = await supabase
+            .from("products")
+            .select("*", { count: "exact", head: true });
+
+        if (error) {
+            return NextResponse.json({ success: false, error: error.message }, { status: 500 });
         }
 
+        const itemsCount = count ?? 0;
         return NextResponse.json({
             success: true,
-            sourceVersion: cache.sourceVersion,
-            updatedAt: cache.updatedAt,
-            itemsCount: cache.data.length,
-            status: "ready"
+            sourceVersion: itemsCount > 0 ? `db-${itemsCount}` : "none",
+            updatedAt: 0,
+            itemsCount,
+            status: itemsCount > 0 ? "ready" : "empty",
         });
     } catch (error: any) {
         return NextResponse.json({ success: false, error: error.message }, { status: 500 });

@@ -1,11 +1,6 @@
 import { Settings, Plan } from "./types";
 import { supabase } from "./supabase";
 
-declare global {
-    var appSettings: Settings | undefined;
-    var appPlans: Plan[] | undefined;
-}
-
 const defaultSettings: Settings = {
     redondeoTotal: 2,
     redondeoCuota: 2,
@@ -63,8 +58,6 @@ const planToRow = (p: Plan) => ({
 });
 
 export const getSettings = async (): Promise<Settings> => {
-    if (global.appSettings) return global.appSettings;
-
     try {
         const { data, error } = await supabase
             .from("app_settings")
@@ -72,16 +65,12 @@ export const getSettings = async (): Promise<Settings> => {
             .eq("id", 1)
             .single();
 
-        if (error || !data) {
-            global.appSettings = { ...defaultSettings };
-            return global.appSettings;
-        }
+        if (error) throw new Error(error.message);
+        if (!data) return { ...defaultSettings };
 
-        global.appSettings = rowToSettings(data as Record<string, unknown>);
-        return global.appSettings;
+        return rowToSettings(data as Record<string, unknown>);
     } catch {
-        global.appSettings = { ...defaultSettings };
-        return global.appSettings;
+        return { ...defaultSettings };
     }
 };
 
@@ -93,36 +82,31 @@ export const updateSettings = async (newSettings: Partial<Settings>): Promise<Se
         .from("app_settings")
         .upsert(settingsToRow(updated));
 
-    global.appSettings = updated;
     return updated;
 };
 
 export const getPlans = async (): Promise<Plan[]> => {
-    if (global.appPlans) return global.appPlans;
-
     try {
         const { data, error } = await supabase
             .from("plans")
             .select("*")
             .order("orden", { ascending: true });
 
-        if (error || !data || data.length === 0) {
-            global.appPlans = [...defaultPlans];
-            return global.appPlans;
-        }
+        if (error) throw new Error(error.message);
+        if (!data || data.length === 0) return [...defaultPlans];
 
-        global.appPlans = (data as Record<string, unknown>[]).map(rowToPlan);
-        return global.appPlans;
+        return (data as Record<string, unknown>[]).map(rowToPlan);
     } catch {
-        global.appPlans = [...defaultPlans];
-        return global.appPlans;
+        return [...defaultPlans];
     }
 };
 
 export const updatePlans = async (newPlans: Plan[]): Promise<Plan[]> => {
-    await supabase.from("plans").delete().neq("id", "");
-    await supabase.from("plans").insert(newPlans.map(planToRow));
+    const { error: deleteError } = await supabase.from("plans").delete().neq("id", "");
+    if (deleteError) throw new Error(deleteError.message);
 
-    global.appPlans = [...newPlans];
-    return global.appPlans;
+    const { error: insertError } = await supabase.from("plans").insert(newPlans.map(planToRow));
+    if (insertError) throw new Error(insertError.message);
+
+    return [...newPlans];
 };

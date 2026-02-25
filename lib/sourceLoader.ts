@@ -1,4 +1,4 @@
-import { Product, CatalogCache } from "./types";
+import { Product } from "./types";
 import { supabase } from "./supabase";
 import * as xlsx from "xlsx";
 import fs from "fs/promises";
@@ -6,12 +6,6 @@ import path from "path";
 
 // @ts-ignore
 const PDFParser = require("pdf2json");
-
-const CACHE_TTL = parseInt(process.env.CACHE_TTL_SECONDS || "600") * 1000;
-
-declare global {
-    var catalogCache: CatalogCache | undefined;
-}
 
 const getErrorMessage = (error: unknown): string => {
     if (error instanceof Error) return error.message;
@@ -282,23 +276,10 @@ const saveProductsToSupabase = async (products: Product[]): Promise<void> => {
 };
 
 export const fetchSourceFile = async (forceRefresh = false): Promise<Product[]> => {
-    const now = Date.now();
-
-    if (!forceRefresh && global.catalogCache) {
-        if (now - global.catalogCache.updatedAt < CACHE_TTL) {
-            return global.catalogCache.data;
-        }
-    }
-
     // Cold start: intentar cargar desde Supabase sin re-parsear el archivo
     if (!forceRefresh) {
         const fromDb = await loadProductsFromSupabase();
         if (fromDb && fromDb.length > 0) {
-            global.catalogCache = {
-                data: fromDb,
-                updatedAt: now,
-                sourceVersion: `db-${now}-${fromDb.length}`,
-            };
             return fromDb;
         }
     }
@@ -350,19 +331,9 @@ export const fetchSourceFile = async (forceRefresh = false): Promise<Product[]> 
 
         await saveProductsToSupabase(deduplicated);
 
-        global.catalogCache = {
-            data: deduplicated,
-            updatedAt: now,
-            sourceVersion: `${now}-${deduplicated.length}`,
-        };
-
         return deduplicated;
     } catch (error) {
         console.error("Error cargando fuente:", error);
-        if (global.catalogCache) {
-            console.warn("Retornando catalogo anterior estandar");
-            return global.catalogCache.data;
-        }
         throw error;
     }
 };
@@ -372,7 +343,6 @@ export const getCurrentCatalog = async (opts?: { forceRefresh?: boolean }): Prom
 };
 
 export const loadFromBuffer = async (buffer: Buffer, type: "pdf" | "excel"): Promise<number> => {
-    const now = Date.now();
     let products: Product[];
 
     if (type === "pdf") {
@@ -386,12 +356,6 @@ export const loadFromBuffer = async (buffer: Buffer, type: "pdf" | "excel"): Pro
     ).values());
 
     await saveProductsToSupabase(deduplicated);
-
-    global.catalogCache = {
-        data: deduplicated,
-        updatedAt: now,
-        sourceVersion: `${now}-${deduplicated.length}`,
-    };
 
     return deduplicated.length;
 };

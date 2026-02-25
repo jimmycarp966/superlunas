@@ -2,11 +2,6 @@ import { Registration, ClientRecord } from "./types";
 import { supabase } from "./supabase";
 import * as xlsx from "xlsx";
 
-declare global {
-    var appRegistrations: Registration[] | undefined;
-    var clientsCache: ClientRecord[] | undefined;
-}
-
 const getErrorMessage = (error: unknown): string => {
     if (error instanceof Error) return error.message;
     if (typeof error === "string") return error;
@@ -97,9 +92,7 @@ export const getRegistrations = async (): Promise<Registration[]> => {
 
     if (error || !data) return [];
 
-    const regs = (data as Record<string, unknown>[]).map(rowToRegistration);
-    global.appRegistrations = regs;
-    return regs;
+    return (data as Record<string, unknown>[]).map(rowToRegistration);
 };
 
 export const addOrUpdateClient = async (client: ClientRecord): Promise<void> => {
@@ -109,18 +102,6 @@ export const addOrUpdateClient = async (client: ClientRecord): Promise<void> => 
     await supabase
         .from("clients")
         .upsert(clientToRow(normalized), { onConflict: "nombre" });
-
-    if (!global.clientsCache) global.clientsCache = [];
-    const idx = global.clientsCache.findIndex(c => c.nombre === nombre);
-    if (idx >= 0) {
-        global.clientsCache = [
-            ...global.clientsCache.slice(0, idx),
-            { ...global.clientsCache[idx], ...normalized },
-            ...global.clientsCache.slice(idx + 1),
-        ];
-    } else {
-        global.clientsCache = [normalized, ...global.clientsCache];
-    }
 };
 
 export const addRegistration = async (data: Omit<Registration, "id" | "fecha">): Promise<Registration> => {
@@ -131,9 +112,6 @@ export const addRegistration = async (data: Omit<Registration, "id" | "fecha">):
     };
 
     await supabase.from("registrations").insert(registrationToRow(reg));
-
-    if (!global.appRegistrations) global.appRegistrations = [];
-    global.appRegistrations = [reg, ...global.appRegistrations];
 
     if (data.cliente) {
         await addOrUpdateClient({
@@ -156,20 +134,16 @@ export const addRegistration = async (data: Omit<Registration, "id" | "fecha">):
 };
 
 export const getClients = async (): Promise<ClientRecord[]> => {
-    if (global.clientsCache && global.clientsCache.length > 0) return global.clientsCache;
-
     const { data, error } = await supabase
         .from("clients")
         .select("*")
         .order("nombre", { ascending: true });
 
     if (error || !data) {
-        if (!global.clientsCache) global.clientsCache = [];
-        return global.clientsCache;
+        return [];
     }
 
-    global.clientsCache = (data as Record<string, unknown>[]).map(rowToClient);
-    return global.clientsCache;
+    return (data as Record<string, unknown>[]).map(rowToClient);
 };
 
 export const loadClientsFromBuffer = async (buffer: Buffer): Promise<number> => {
@@ -254,6 +228,5 @@ export const loadClientsFromBuffer = async (buffer: Buffer): Promise<number> => 
         throw new Error(`Fallo actualizacion de clients en Supabase: ${insertMessage}. Se restauro la lista anterior.`);
     }
 
-    global.clientsCache = clients;
     return clients.length;
 };
