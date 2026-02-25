@@ -51,6 +51,20 @@ function CotizadorCol({ products, plans, settings, onFicha }: ColProps) {
     const [qty, setQty] = useState(1);
     const [anticipo, setAnticipo] = useState(0);
 
+    useEffect(() => {
+        if (!product) return;
+        const updated = products.find(p => p.codigo === product.codigo);
+        if (!updated) {
+            setProduct(null);
+            return;
+        }
+        const changed =
+            updated.precio !== product.precio ||
+            updated.stock !== product.stock ||
+            updated.nombre !== product.nombre;
+        if (changed) setProduct(updated);
+    }, [products, product]);
+
     const filtered = useMemo(() => {
         const q = search.toLowerCase().trim();
         if (!q) return products.slice(0, 100);
@@ -224,7 +238,10 @@ export default function CotizadorPage() {
     }
 
     async function fetchProducts(listName: string) {
-        const res = await fetch(`/api/products?list=${encodeURIComponent(listName)}`);
+        const listKey = (listName || "").trim().toLowerCase();
+        const res = await fetch(`/api/products?list=${encodeURIComponent(listKey)}&_t=${Date.now()}`, {
+            cache: "no-store",
+        });
         const json = await res.json();
         if (json.success) setProducts(json.data);
     }

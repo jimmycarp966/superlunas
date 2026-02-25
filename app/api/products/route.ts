@@ -8,16 +8,24 @@ export async function GET(request: NextRequest) {
     try {
         const list = request.nextUrl.searchParams.get("list");
         const forceRefresh = request.nextUrl.searchParams.get("refresh") === "1";
+        const listKey = (list || "local").trim().toLowerCase();
 
         const [catalog, settings] = await Promise.all([
             getCurrentCatalog({ forceRefresh }),
             getSettings(),
         ]);
 
+        const normalizedMarkups = Object.fromEntries(
+            Object.entries(settings.listaMarkups ?? {}).map(([k, v]) => [
+                String(k).trim().toLowerCase(),
+                Number(v) || 0,
+            ])
+        );
+
         // Todos los productos se almacenan como "local".
         // Para otras listas se aplica el recargo configurado.
-        const markup = list && list !== "local" && list !== "todos"
-            ? (settings.listaMarkups?.[list] ?? 0)
+        const markup = listKey && listKey !== "local" && listKey !== "todos"
+            ? (normalizedMarkups[listKey] ?? 0)
             : 0;
 
         const data = markup > 0

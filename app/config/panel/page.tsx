@@ -656,7 +656,13 @@ export default function AdminPanel() {
                                     <input
                                         type="text"
                                         value={settings.listas.join(", ")}
-                                        onChange={(e) => setSettings({ ...settings, listas: e.target.value.split(",").map((s: string) => s.trim()).filter(Boolean) })}
+                                        onChange={(e) => setSettings({
+                                            ...settings,
+                                            listas: e.target.value
+                                                .split(",")
+                                                .map((s: string) => s.trim().toLowerCase())
+                                                .filter(Boolean)
+                                        })}
                                         className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500"
                                         placeholder="local, valles"
                                     />
@@ -670,29 +676,32 @@ export default function AdminPanel() {
                                         Porcentaje de aumento sobre los precios base (lista local) para cada lista adicional. Los productos siempre se suben desde un solo PDF.
                                     </p>
                                     <div className="space-y-3">
-                                        {settings.listas.filter((l: string) => l !== "local").map((lst: string) => (
+                                        {settings.listas.filter((l: string) => l.toLowerCase() !== "local").map((lst: string) => {
+                                            const listKey = lst.trim().toLowerCase();
+                                            const markup = Number(settings.listaMarkups?.[listKey] ?? 0);
+                                            return (
                                             <div key={lst} className="flex items-center gap-3">
                                                 <span className="text-white text-sm font-bold uppercase w-20">{lst}</span>
                                                 <input
                                                     type="number"
                                                     min={0}
                                                     step={0.5}
-                                                    value={settings.listaMarkups?.[lst] ?? 0}
+                                                    value={markup}
                                                     onChange={(e) => setSettings({
                                                         ...settings,
-                                                        listaMarkups: { ...settings.listaMarkups, [lst]: Number(e.target.value) }
+                                                        listaMarkups: { ...settings.listaMarkups, [listKey]: Number(e.target.value) }
                                                     })}
                                                     className="w-24 bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500"
                                                 />
                                                 <span className="text-neutral-400 text-sm">%</span>
                                                 <span className="text-neutral-500 text-xs">
-                                                    {settings.listaMarkups?.[lst] > 0
-                                                        ? `+${settings.listaMarkups[lst]}% sobre precio local`
+                                                    {markup > 0
+                                                        ? `+${markup}% sobre precio local`
                                                         : "Sin recargo"}
                                                 </span>
                                             </div>
-                                        ))}
-                                        {settings.listas.filter((l: string) => l !== "local").length === 0 && (
+                                        )})}
+                                        {settings.listas.filter((l: string) => l.toLowerCase() !== "local").length === 0 && (
                                             <p className="text-neutral-600 text-xs">No hay listas adicionales configuradas.</p>
                                         )}
                                     </div>
