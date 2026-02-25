@@ -1,0 +1,9 @@
+[    3649ms] [WARNING] Unrecognized feature: 'ambient-light-sensor'. @ https://script.google.com/macros/s/AKfycby_mPQB95ROJXtrE72VnsWw6WOuphHo0TemsWES9c6wIgDD6-_KbqkBCro5TZocgSZf/exec:10
+[    3649ms] [WARNING] Unrecognized feature: 'speaker'. @ https://script.google.com/macros/s/AKfycby_mPQB95ROJXtrE72VnsWw6WOuphHo0TemsWES9c6wIgDD6-_KbqkBCro5TZocgSZf/exec:10
+[    3649ms] [WARNING] Unrecognized feature: 'vibrate'. @ https://script.google.com/macros/s/AKfycby_mPQB95ROJXtrE72VnsWw6WOuphHo0TemsWES9c6wIgDD6-_KbqkBCro5TZocgSZf/exec:10
+[    3649ms] [WARNING] Unrecognized feature: 'vr'. @ https://script.google.com/macros/s/AKfycby_mPQB95ROJXtrE72VnsWw6WOuphHo0TemsWES9c6wIgDD6-_KbqkBCro5TZocgSZf/exec:10
+[    3651ms] [WARNING] An iframe which has both allow-scripts and allow-same-origin for its sandbox attribute can escape its sandboxing. @ about:blank:0
+[    4335ms] [WARNING] Unrecognized feature: 'ambient-light-sensor'. @ https://n-hq5tfxl2v42rrxfnjb3sfg2favnepay3y7errva-0lu-script.googleusercontent.com/userCodeAppPanel:0
+[    4335ms] [WARNING] Unrecognized feature: 'speaker'. @ https://n-hq5tfxl2v42rrxfnjb3sfg2favnepay3y7errva-0lu-script.googleusercontent.com/userCodeAppPanel:0
+[    4335ms] [WARNING] Unrecognized feature: 'vibrate'. @ https://n-hq5tfxl2v42rrxfnjb3sfg2favnepay3y7errva-0lu-script.googleusercontent.com/userCodeAppPanel:0
+[    4335ms] [WARNING] Unrecognized feature: 'vr'. @ https://n-hq5tfxl2v42rrxfnjb3sfg2favnepay3y7errva-0lu-script.googleusercontent.com/userCodeAppPanel:0

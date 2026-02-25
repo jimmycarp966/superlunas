@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd \"D:\\\\Daniel\\\\Paginas\\\\Clientes\\\\Lunas Confort\" && git remote add origin https://github.com/jimmycarp966/superlunas.git && git push -u origin main 2>&1)",
+      "Bash(head:*)",
+      "Bash(where ffmpeg:*)"
+    ]
+  }
+}

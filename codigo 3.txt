@@ -1,0 +1,129 @@
+// ==========================================
+// CONFIGURACIÓN DE CONEXIÓN
+// ==========================================
+
+// 1. ID de PRECIOS y CUMPLEAÑOS
+var ID_PRECIOS = "10icwZuxhX_c8j8guF383eZpL7irAzIQWrY69soC6UZ4"; 
+
+// 2. ID de REGISTRO DE VENTAS
+var ID_REGISTRO = "1ykPt8GSjk2xnJB1ptW7Ens4blhONCGtg3Y4ODvotppQ"; 
+
+// ==========================================
+// LÓGICA DEL SISTEMA
+// ==========================================
+
+function doGet() {
+  return HtmlService.createHtmlOutputFromFile('index')
+      .setTitle('Cotizador Lunas Confort')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
+}
+
+// Función para verificar cumpleaños hoy
+function verificarCumple() {
+  try {
+    var ss = SpreadsheetApp.openById(ID_PRECIOS);
+    var sheet = ss.getSheetByName("CUMPLES");
+    if (!sheet) return null;
+
+    var datos = sheet.getDataRange().getValues();
+    var hoy = new Date();
+    var dia = hoy.getDate();
+    var mes = hoy.getMonth() + 1; 
+
+    var cumpleaneros = [];
+
+    for (var i = 0; i < datos.length; i++) {
+      var nombre = datos[i][0];
+      var fechaRaw = datos[i][1]; 
+      
+      if (!nombre || !fechaRaw) continue;
+
+      var fDia, fMes;
+
+      if (fechaRaw instanceof Date) {
+        fDia = fechaRaw.getDate();
+        fMes = fechaRaw.getMonth() + 1;
+      } else if (typeof fechaRaw === 'string' && fechaRaw.includes('/')) {
+        var partes = fechaRaw.split('/');
+        fDia = parseInt(partes[0]);
+        fMes = parseInt(partes[1]);
+      }
+
+      if (fDia === dia && fMes === mes) {
+        cumpleaneros.push(nombre);
+      }
+    }
+
+    if (cumpleaneros.length > 0) {
+      return cumpleaneros.join(" y ");
+    }
+    return null;
+
+  } catch (e) {
+    return null;
+  }
+}
+
+function obtenerDatosDesdeSheets(tipoLista) {
+  try {
+    var ss = SpreadsheetApp.openById(ID_PRECIOS);
+    var hojaNombre = (tipoLista === 'valles') ? "LISTA VALLES" : "LISTA LOCAL"; 
+    var sheet = ss.getSheetByName(hojaNombre);
+    
+    if (!sheet) return [];
+
+    var datos = sheet.getDataRange().getValues();
+    var productos = [];
+    
+    for (var i = 1; i < datos.length; i++) {
+      if (datos[i][1]) { 
+        productos.push({
+          codigo: datos[i][0], 
+          nombre: datos[i][1], 
+          precio: datos[i][2], 
+          stock: datos[i][3]
+        });
+      }
+    }
+    return productos;
+  } catch (e) { 
+    return []; 
+  }
+}
+
+function registrarPedido(datos) {
+  try {
+    var ss = SpreadsheetApp.openById(ID_REGISTRO);
+    var hoja = ss.getSheetByName("Registro"); 
+    
+    if (!hoja) {
+      hoja = ss.insertSheet("Registro");
+      hoja.appendRow([
+        "FECHA", "VENDEDOR", "ZONA", "CLIENTE", "Nº CLIENTE", "DNI", "TELEFONO", "LOCALIDAD", 
+        "PRODUCTOS", "PLANES", "ANTICIPO", "TOTAL FINANCIADO", "CONYUGUE", "DNI CONYUGUE", "TEL CONYUGUE", "OBSERVACIONES"
+      ]);
+      hoja.getRange(1, 1, 1, 16).setFontWeight("bold");
+    }
+    
+    hoja.appendRow([
+      new Date(),
+      datos.vendedor,
+      datos.zona,
+      datos.cliente,
+      datos.es_cliente, 
+      datos.dni,
+      datos.telefono,
+      datos.localidad,
+      datos.productos, 
+      datos.planes,    
+      datos.anticipo,  
+      datos.total,     
+      datos.ref_nombre,
+      datos.ref_dni,
+      datos.ref_tel,    
+      datos.obs
+    ]);
+    return "OK";
+  } catch (e) { return "ERROR: " + e.toString(); }
+}
