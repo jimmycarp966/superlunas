@@ -5,8 +5,9 @@ let _client: SupabaseClient | null = null;
 export const getSupabase = (): SupabaseClient => {
     if (_client) return _client;
 
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const url = (process.env.NEXT_PUBLIC_SUPABASE_URL || "").trim();
+    // Vercel UI copies can accidentally include newlines/spaces.
+    const key = (process.env.SUPABASE_SERVICE_ROLE_KEY || "").replace(/\s+/g, "");
 
     if (!url || !key) {
         throw new Error("NEXT_PUBLIC_SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY son requeridas");
