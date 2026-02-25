@@ -15,6 +15,9 @@ interface Toast {
     message: string;
 }
 
+const PLANS_SYNC_CHANNEL = "plans-updates";
+const PLANS_SYNC_STORAGE_KEY = "lunas_plans_updated_at";
+
 export default function AdminPanel() {
     const [tab, setTab] = useState<"origen" | "planes" | "ajustes" | "registros" | "clientes">("origen");
     const [sourceStatus, setSourceStatus] = useState<any>(null);
@@ -69,6 +72,25 @@ export default function AdminPanel() {
         setTimeout(() => setToast(null), 4000);
     };
 
+    const broadcastPlansUpdated = () => {
+        const stamp = Date.now().toString();
+        try {
+            localStorage.setItem(PLANS_SYNC_STORAGE_KEY, stamp);
+        } catch {
+            // ignore
+        }
+
+        try {
+            if ("BroadcastChannel" in window) {
+                const channel = new BroadcastChannel(PLANS_SYNC_CHANNEL);
+                channel.postMessage({ type: "plans-updated", updatedAt: stamp });
+                channel.close();
+            }
+        } catch {
+            // ignore
+        }
+    };
+
     const fetchStatus = async () => {
         try {
             const res = await fetch("/api/source/refresh");
@@ -84,7 +106,7 @@ export default function AdminPanel() {
     };
 
     const fetchPlans = async () => {
-        const res = await fetch("/api/plans");
+        const res = await fetch(`/api/plans?_t=${Date.now()}`, { cache: "no-store" });
         const json = await res.json();
         if (json.success) setPlans(json.data.sort((a: any, b: any) => a.orden - b.orden));
     };
@@ -209,6 +231,8 @@ export default function AdminPanel() {
                 body: JSON.stringify(plans),
             });
             if (res.ok) {
+                await fetchPlans();
+                broadcastPlansUpdated();
                 showToast("success", "Planes guardados correctamente");
             } else {
                 showToast("error", "Error al guardar planes");
@@ -293,7 +317,7 @@ export default function AdminPanel() {
 
             {/* Toast */}
             {toast && (
-                <div className={`fixed top-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-xl border text-sm font-medium transition-all
+                <div className={`fixed top-4 left-4 right-4 sm:left-auto sm:right-4 sm:max-w-sm z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-xl border text-sm font-medium transition-all
                     ${toast.type === "success" ? "bg-emerald-900/90 border-emerald-700 text-emerald-200" : ""}
                     ${toast.type === "error" ? "bg-red-900/90 border-red-700 text-red-200" : ""}
                     ${toast.type === "info" ? "bg-blue-900/90 border-blue-700 text-blue-200" : ""}
@@ -309,8 +333,8 @@ export default function AdminPanel() {
 
             {/* Header */}
             <header className="bg-neutral-900 border-b border-neutral-800 sticky top-0 z-10">
-                <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
-                    <div className="flex items-center gap-4">
+                <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div className="flex items-center gap-3 sm:gap-4">
                         <div className="p-2 bg-indigo-500/20 rounded-lg">
                             <Settings className="w-5 h-5 text-indigo-400" />
                         </div>
@@ -319,7 +343,7 @@ export default function AdminPanel() {
                             <p className="text-neutral-500 text-xs">Luna&apos;s Confort</p>
                         </div>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto justify-end">
                         <a
                             href="/cotizador"
                             className="flex items-center gap-2 text-sm text-neutral-400 hover:text-white transition-colors px-3 py-1.5 rounded-lg hover:bg-neutral-800"
@@ -340,11 +364,11 @@ export default function AdminPanel() {
                 </div>
             </header>
 
-            <div className="max-w-5xl mx-auto p-6 md:p-8 flex flex-col md:flex-row gap-8">
+            <div className="max-w-5xl mx-auto px-4 py-5 sm:p-6 md:p-8 flex flex-col lg:flex-row gap-5 sm:gap-8">
 
                 {/* Sidebar */}
-                <nav className="w-full md:w-52 flex-shrink-0">
-                    <div className="flex flex-col gap-1">
+                <nav className="w-full lg:w-52 flex-shrink-0">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-1 gap-1">
                         {navItems.map((item) => {
                             const Icon = item.icon;
                             const active = tab === item.id;
@@ -377,7 +401,7 @@ export default function AdminPanel() {
 
                             {/* Estado actual */}
                             <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-5">
-                                <div className="flex items-center justify-between mb-4">
+                                <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
                                     <div className="flex items-center gap-2">
                                         {sourceStatus?.status === "ready"
                                             ? <CheckCircle className="w-5 h-5 text-emerald-400" />
@@ -530,7 +554,7 @@ export default function AdminPanel() {
                     {/* ── TAB: PLANES ── */}
                     {tab === "planes" && (
                         <div className="space-y-5">
-                            <div className="flex items-center justify-between">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
                                 <h2 className="text-xl font-bold text-white">Planes de Pago</h2>
                                 <button
                                     onClick={handleSavePlans}
@@ -545,8 +569,8 @@ export default function AdminPanel() {
                             <div className="space-y-3">
                                 {plans.map((plan, i) => (
                                     <div key={plan.id} className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4">
-                                        <div className="flex items-center gap-3 flex-wrap">
-                                            <div className="flex-1 min-w-[140px]">
+                                        <div className="flex items-end gap-3 flex-wrap">
+                                            <div className="w-full sm:flex-1 sm:min-w-[140px]">
                                                 <label className="text-xs text-neutral-500 mb-1 block">Nombre</label>
                                                 <input
                                                     type="text"
@@ -555,7 +579,7 @@ export default function AdminPanel() {
                                                     className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
                                                 />
                                             </div>
-                                            <div className="w-24">
+                                            <div className="w-full sm:w-24">
                                                 <label className="text-xs text-neutral-500 mb-1 block">Semanas</label>
                                                 <input
                                                     type="number"
@@ -564,7 +588,7 @@ export default function AdminPanel() {
                                                     className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white text-center focus:outline-none focus:border-indigo-500"
                                                 />
                                             </div>
-                                            <div className="w-24">
+                                            <div className="w-full sm:w-24">
                                                 <label className="text-xs text-neutral-500 mb-1 block">Tasa %</label>
                                                 <div className="relative">
                                                     <input
@@ -576,7 +600,7 @@ export default function AdminPanel() {
                                                     <span className="absolute right-2 top-2 text-neutral-500 text-xs">%</span>
                                                 </div>
                                             </div>
-                                            <div className="w-32">
+                                            <div className="w-full sm:w-32">
                                                 <label className="text-xs text-neutral-500 mb-1 block">Badge</label>
                                                 <input
                                                     type="text"
@@ -586,7 +610,7 @@ export default function AdminPanel() {
                                                     className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-indigo-500"
                                                 />
                                             </div>
-                                            <div className="w-16">
+                                            <div className="w-full sm:w-16">
                                                 <label className="text-xs text-neutral-500 mb-1 block">Orden</label>
                                                 <input
                                                     type="number"
@@ -595,7 +619,7 @@ export default function AdminPanel() {
                                                     className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white text-center focus:outline-none focus:border-indigo-500"
                                                 />
                                             </div>
-                                            <div className="flex flex-col items-center gap-1">
+                                            <div className="flex flex-col sm:items-center gap-1 min-w-[84px]">
                                                 <label className="text-xs text-neutral-500">Activo</label>
                                                 <label className="relative inline-flex items-center cursor-pointer">
                                                     <input
@@ -609,7 +633,7 @@ export default function AdminPanel() {
                                             </div>
                                             <button
                                                 onClick={() => removePlan(i)}
-                                                className="mt-4 p-2 text-neutral-600 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
+                                                className="p-2 text-neutral-600 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
                                             >
                                                 <Trash2 className="w-4 h-4" />
                                             </button>
@@ -637,7 +661,7 @@ export default function AdminPanel() {
                     {/* ── TAB: AJUSTES ── */}
                     {tab === "ajustes" && settings && (
                         <div className="space-y-5">
-                            <div className="flex items-center justify-between">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
                                 <h2 className="text-xl font-bold text-white">Ajustes Generales</h2>
                                 <button
                                     onClick={handleSaveSettings}
@@ -743,7 +767,7 @@ export default function AdminPanel() {
                     {/* ── TAB: REGISTROS ── */}
                     {tab === "registros" && (
                         <div className="space-y-5">
-                            <div className="flex items-center justify-between">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
                                 <h2 className="text-xl font-bold text-white">Registros de Ventas</h2>
                                 <div className="flex items-center gap-3">
                                     <span className="text-sm text-neutral-400">{registrations.length} registros</span>
@@ -930,7 +954,7 @@ export default function AdminPanel() {
 
                             {/* Lista completa */}
                             <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-5">
-                                <div className="flex items-center justify-between mb-4">
+                                <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
                                     <div className="flex items-center gap-3">
                                         <h3 className="font-semibold text-white">Clientes en memoria</h3>
                                         {allClients.length > 0 && (
@@ -1040,7 +1064,7 @@ export default function AdminPanel() {
                                         )}
 
                                         {totalClientPages > 1 && (
-                                            <div className="flex items-center justify-between mt-4 pt-4 border-t border-neutral-800">
+                                            <div className="flex flex-wrap items-center justify-between gap-3 mt-4 pt-4 border-t border-neutral-800">
                                                 <p className="text-xs text-neutral-500">
                                                     Página {clientsPage + 1} de {totalClientPages} · {filteredClients.length} clientes
                                                 </p>

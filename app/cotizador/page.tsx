@@ -1,10 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { ClipboardList, RotateCcw, Check } from "lucide-react";
 import { calcPlanStats, generatePresupuestoText, formatARS } from "./utils";
 import RegistrationModal from "./RegistrationModal";
+
+const PLANS_SYNC_CHANNEL = "plans-updates";
+const PLANS_SYNC_STORAGE_KEY = "lunas_plans_updated_at";
 
 function PlanCard({ p }: { p: any }) {
     const isContado = p.semanas === 0;
@@ -22,14 +25,14 @@ function PlanCard({ p }: { p: any }) {
                     {p.badge}
                 </span>
             )}
-            <div className={`px-3 pt-2 pb-1 text-[11px] font-black uppercase tracking-wide ${titleClass}`}>
+            <div className={`px-3 pt-2 pb-1 text-[10px] sm:text-[11px] font-black uppercase tracking-wide ${titleClass}`}>
                 {isContado ? "Contado" : `${p.semanas} semanas`}
             </div>
             <div className="px-3 pb-2">
-                <div className={`text-[34px] leading-none font-extrabold ${amountClass}`}>
+                <div className={`text-[27px] sm:text-[34px] leading-none font-extrabold ${amountClass}`}>
                     ${formatARS(p.calcTotal)}
                 </div>
-                <div className={`text-[13px] font-semibold mt-1 ${subtitleClass}`}>
+                <div className={`text-[12px] sm:text-[13px] font-semibold mt-1 ${subtitleClass}`}>
                     {isContado
                         ? `1 cuota de $ ${formatARS(p.calcTotal)}`
                         : `${p.semanas} cuotas de $ ${formatARS(p.cuota)}`}
@@ -105,13 +108,13 @@ function CotizadorCol({ products, plans, settings, onFicha }: ColProps) {
     };
 
     return (
-        <div className="bg-[#1a2638] border border-[#2d3b4f] rounded-2xl p-3.5 flex flex-col gap-2.5 shadow-[0_6px_20px_rgba(0,0,0,0.35)]">
+        <div className="bg-[#1a2638] border border-[#2d3b4f] rounded-2xl p-3 sm:p-3.5 flex flex-col gap-2.5 shadow-[0_6px_20px_rgba(0,0,0,0.35)]">
             <input
                 type="text"
                 placeholder="Codigo"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full bg-[#0d1522] border border-[#f0a12e] rounded-lg px-3 py-2 text-white text-base font-bold placeholder-gray-500 focus:outline-none"
+                className="w-full bg-[#0d1522] border border-[#f0a12e] rounded-lg px-3 py-2 text-white text-sm sm:text-base font-bold placeholder-gray-500 focus:outline-none"
             />
 
             <select
@@ -192,10 +195,10 @@ function CotizadorCol({ products, plans, settings, onFicha }: ColProps) {
 
             {product ? (
                 <div className="bg-[#0f1724] border border-[#f0a12e] rounded-lg px-3 py-2.5">
-                    <div className="text-white font-black text-[19px] leading-tight uppercase">
+                    <div className="text-white font-black text-[15px] sm:text-[19px] leading-tight uppercase">
                         [{product.codigo}] {product.nombre}
                     </div>
-                    <div className="text-[#ffc64f] font-extrabold text-[40px] leading-none mt-1">
+                    <div className="text-[#ffc64f] font-extrabold text-[30px] sm:text-[40px] leading-none mt-1">
                         ${formatARS(calc.subtotal)}
                     </div>
                     <span
@@ -235,44 +238,104 @@ export default function CotizadorPage() {
     const [showRegistration, setShowRegistration] = useState(false);
     const [activeCalc, setActiveCalc] = useState<any | null>(null);
 
-    useEffect(() => {
-        fetchInitialData();
+    const fetchPlans = useCallback(async () => {
+        try {
+            const res = await fetch(`/api/plans?_t=${Date.now()}`, { cache: "no-store" });
+            const json = await res.json();
+            if (json.success) {
+                setPlans(
+                    json.data
+                        .sort((a: any, b: any) => a.orden - b.orden)
+                        .filter((p: any) => p.activo)
+                );
+                return true;
+            }
+        } catch {
+            // Ignorado: se mantiene el ultimo estado util.
+        }
+        return false;
     }, []);
+
+    const fetchSettings = useCallback(async () => {
+        try {
+            const res = await fetch(`/api/settings?_t=${Date.now()}`, { cache: "no-store" });
+            const json = await res.json();
+            if (json.success) {
+                setSettings(json.data);
+                return json.data;
+            }
+        } catch {
+            // Ignorado: se mantiene el ultimo estado util.
+        }
+        return null;
+    }, []);
+
+    useEffect(() => {
+        let active = true;
+        const load = async () => {
+            setLoading(true);
+            const [_, settingsData] = await Promise.all([fetchPlans(), fetchSettings()]);
+            if (!active) return;
+            if (settingsData?.listas?.length > 0) {
+                setSelectedList(String(settingsData.listas[0]));
+            }
+            setLoading(false);
+        };
+        void load();
+        return () => {
+            active = false;
+        };
+    }, [fetchPlans, fetchSettings]);
 
     useEffect(() => {
         if (settings) fetchProducts(selectedList);
     }, [selectedList, settings]);
 
-    async function fetchInitialData() {
-        setLoading(true);
-        const [resPlans, resSettings] = await Promise.all([
-            fetch("/api/plans").then((r) => r.json()),
-            fetch("/api/settings").then((r) => r.json()),
-        ]);
-        if (resPlans.success) {
-            setPlans(
-                resPlans.data
-                    .sort((a: any, b: any) => a.orden - b.orden)
-                    .filter((p: any) => p.activo)
-            );
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+
+        let channel: BroadcastChannel | null = null;
+        const syncPlans = () => { void fetchPlans(); };
+
+        const handleStorage = (event: StorageEvent) => {
+            if (event.key === PLANS_SYNC_STORAGE_KEY) syncPlans();
+        };
+        const handleFocus = () => syncPlans();
+        const handleVisibility = () => {
+            if (document.visibilityState === "visible") syncPlans();
+        };
+
+        if ("BroadcastChannel" in window) {
+            channel = new BroadcastChannel(PLANS_SYNC_CHANNEL);
+            channel.onmessage = (event) => {
+                if (event.data?.type === "plans-updated") syncPlans();
+            };
         }
-        if (resSettings.success) {
-            setSettings(resSettings.data);
-            if (resSettings.data.listas.length > 0) {
-                setSelectedList(resSettings.data.listas[0]);
-            }
-        }
-        setLoading(false);
-    }
+
+        window.addEventListener("storage", handleStorage);
+        window.addEventListener("focus", handleFocus);
+        document.addEventListener("visibilitychange", handleVisibility);
+
+        return () => {
+            window.removeEventListener("storage", handleStorage);
+            window.removeEventListener("focus", handleFocus);
+            document.removeEventListener("visibilitychange", handleVisibility);
+            if (channel) channel.close();
+        };
+    }, [fetchPlans]);
 
     async function fetchProducts(listName: string) {
         const listKey = (listName || "").trim().toLowerCase();
-        const res = await fetch(
-            `/api/products?list=${encodeURIComponent(listKey)}&_t=${Date.now()}`,
-            { cache: "no-store" }
-        );
-        const json = await res.json();
-        if (json.success) setProducts(json.data);
+        try {
+            const res = await fetch(
+                `/api/products?list=${encodeURIComponent(listKey)}&_t=${Date.now()}`,
+                { cache: "no-store" }
+            );
+            const json = await res.json();
+            if (json.success) setProducts(json.data);
+        } catch {
+            // Ignorado: se mantiene el ultimo estado util.
+        }
     }
 
     if (loading) {
@@ -280,8 +343,8 @@ export default function CotizadorPage() {
     }
 
     return (
-        <div className="w-full max-w-[1500px] px-3 md:px-6 py-3 flex flex-col items-center gap-4">
-            <div className="w-full max-w-[450px] bg-[#1a2638] border border-[#2d3b4f] rounded-xl p-2.5 shadow-[0_5px_16px_rgba(0,0,0,0.35)]">
+        <div className="w-full max-w-[1500px] px-2 sm:px-3 md:px-6 py-3 flex flex-col items-center gap-4">
+            <div className="w-full max-w-[520px] bg-[#1a2638] border border-[#2d3b4f] rounded-xl p-2.5 shadow-[0_5px_16px_rgba(0,0,0,0.35)]">
                 <div className="flex items-center gap-2">
                     <select
                         value={selectedList}
@@ -307,7 +370,7 @@ export default function CotizadorPage() {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 w-full">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 w-full">
                 <CotizadorCol
                     products={products}
                     plans={plans}

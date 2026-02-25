@@ -7,7 +7,10 @@ export const dynamic = "force-dynamic";
 export async function GET() {
     try {
         const plans = await getPlans();
-        return NextResponse.json({ success: true, data: plans });
+        return NextResponse.json(
+            { success: true, data: plans },
+            { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } }
+        );
     } catch (e: any) {
         return NextResponse.json({ error: e.message }, { status: 500 });
     }

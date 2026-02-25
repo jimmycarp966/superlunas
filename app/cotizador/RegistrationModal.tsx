@@ -205,11 +205,11 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
     const inp = "w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-indigo-500";
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-            <div className="w-full max-w-4xl bg-neutral-900 border border-neutral-800 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[95vh]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-sm">
+            <div className="w-full max-w-4xl bg-neutral-900 border border-neutral-800 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[96vh]">
 
                 {/* Header */}
-                <div className="px-6 py-4 bg-neutral-800 flex items-center justify-between border-b border-neutral-700 shrink-0">
+                <div className="px-4 sm:px-6 py-4 bg-neutral-800 flex items-center justify-between border-b border-neutral-700 shrink-0">
                     <div className="flex items-center gap-2 text-white font-semibold">
                         <ClipboardList className="w-5 h-5 text-indigo-400" />
                         Ficha de Registro {colLabel ? `— ${colLabel}` : ""}
@@ -219,10 +219,10 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
                     </button>
                 </div>
 
-                <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
+                <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
 
                     {/* Left: form */}
-                    <div className="flex-1 overflow-y-auto p-5 space-y-3 border-r border-neutral-800">
+                    <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3 border-b border-neutral-800 lg:border-b-0 lg:border-r">
 
                         {/* Vendedor */}
                         <div>
@@ -255,7 +255,7 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
                         </div>
 
                         {/* N° Cliente + DNI */}
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
                                 <label className="text-xs text-neutral-500 mb-1 block">N° Cliente</label>
                                 <input type="text" value={form.nroCliente} onChange={e => setField("nroCliente", e.target.value)} className={inp} />
@@ -267,7 +267,7 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
                         </div>
 
                         {/* Teléfono + Localidad */}
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
                                 <label className="text-xs text-neutral-500 mb-1 block">Teléfono</label>
                                 <input type="text" value={form.telefono} onChange={e => setField("telefono", e.target.value)} className={inp} />
@@ -279,7 +279,7 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
                         </div>
 
                         {/* Zona + Rubro */}
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
                                 <label className="text-xs text-neutral-500 mb-1 block">Zona</label>
                                 <input type="text" value={form.zona} onChange={e => setField("zona", e.target.value)} className={inp} />
@@ -291,7 +291,7 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
                         </div>
 
                         {/* Dom. Comercial + Dom. Particular */}
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
                                 <label className="text-xs text-neutral-500 mb-1 block">Dom. Comercial</label>
                                 <input type="text" value={form.domCom} onChange={e => setField("domCom", e.target.value)} className={inp} />
@@ -307,7 +307,7 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
                             <p className="text-xs text-neutral-500 mb-2 font-medium uppercase tracking-wide">Cónyuge / Co-titular</p>
                             <div className="space-y-2">
                                 <input type="text" value={form.conyugue} onChange={e => setField("conyugue", e.target.value)} placeholder="Nombre del cónyuge" className={inp} />
-                                <div className="grid grid-cols-2 gap-3">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     <input type="text" value={form.dniConyugue} onChange={e => setField("dniConyugue", e.target.value)} placeholder="DNI cónyuge" className={inp} />
                                     <input type="text" value={form.telConyugue} onChange={e => setField("telConyugue", e.target.value)} placeholder="Tel. cónyuge" className={inp} />
                                 </div>
@@ -331,7 +331,7 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
                     </div>
 
                     {/* Right: plan selector + preview */}
-                    <div className="w-full md:w-80 flex flex-col p-5 gap-4 overflow-y-auto shrink-0">
+                    <div className="w-full lg:w-80 flex flex-col p-4 sm:p-5 gap-4 overflow-y-auto shrink-0">
 
                         {/* Plan */}
                         <div>

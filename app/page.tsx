@@ -50,14 +50,14 @@ export default function LoginPage() {
     };
 
     return (
-        <main className="min-h-screen bg-black flex items-center justify-center p-4">
+        <main className="min-h-screen bg-black flex items-center justify-center p-3 sm:p-4">
             {/* Tarjeta de login */}
             <div className="w-full max-w-sm bg-[#0d0d1a] rounded-2xl shadow-2xl border border-[#2a2a4a] overflow-hidden">
                 {/* Cabecera con logo */}
-                <div className="px-6 pt-8 pb-6 text-center border-b border-[#2a2a4a]">
+                <div className="px-5 sm:px-6 pt-7 sm:pt-8 pb-5 sm:pb-6 text-center border-b border-[#2a2a4a]">
                     <div className="text-center mb-3">
-                        <h1 className="text-3xl font-extrabold text-white tracking-widest uppercase" style={{ WebkitTextStroke: '1px #f97316' }}>
-                            <span className="text-yellow-400 text-5xl inline-block -mr-2">C</span>
+                        <h1 className="text-[26px] sm:text-3xl font-extrabold text-white tracking-widest uppercase" style={{ WebkitTextStroke: '1px #f97316' }}>
+                            <span className="text-yellow-400 text-[42px] sm:text-5xl inline-block -mr-2">C</span>
                             <span className="text-red-500">L</span>UNA&apos;S
                             <br />
                             <span className="text-red-500">C</span>ONFORT
@@ -68,7 +68,7 @@ export default function LoginPage() {
                 </div>
 
                 {/* Formulario */}
-                <form onSubmit={handleLogin} className="px-6 py-8 space-y-5">
+                <form onSubmit={handleLogin} className="px-5 sm:px-6 py-7 sm:py-8 space-y-5">
                     <h2 className="text-white font-bold text-xl text-center tracking-wider uppercase">
                         Acceso Sistema
                     </h2>

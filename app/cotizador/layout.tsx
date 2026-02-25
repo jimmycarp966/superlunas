@@ -21,12 +21,12 @@ export default async function CotizadorLayout({
 
     return (
         <div className="flex flex-col min-h-screen bg-[radial-gradient(circle_at_50%_-20%,#183254_0%,#0f1f36_35%,#0a1729_100%)] text-neutral-200">
-            <header className="w-full py-3 px-4 md:px-6 relative z-10">
-                <div className="flex justify-end items-center gap-3">
+            <header className="w-full py-3 px-3 sm:px-4 md:px-6 relative z-10">
+                <div className="flex flex-wrap justify-end items-center gap-2 sm:gap-3">
                     {isAdmin && (
                         <a
                             href="/config/panel"
-                            className="flex items-center gap-2 px-3 py-1.5 bg-[#101d30] hover:bg-[#1a2a45] text-neutral-200 text-xs font-black tracking-wide rounded border border-[#2a3a57] transition-all uppercase"
+                            className="flex items-center gap-2 px-2.5 sm:px-3 py-1.5 bg-[#101d30] hover:bg-[#1a2a45] text-neutral-200 text-[11px] sm:text-xs font-black tracking-wide rounded border border-[#2a3a57] transition-all uppercase"
                         >
                             Configurar
                         </a>
@@ -34,7 +34,7 @@ export default async function CotizadorLayout({
                     <form action="/api/auth/logout" method="POST">
                         <button
                             type="submit"
-                            className="flex items-center gap-2 px-3 py-1.5 bg-[#ef3d2f] hover:bg-[#d8382b] text-white text-xs font-black tracking-wide rounded border border-red-300/25 shadow-lg shadow-red-900/25 transition-all uppercase"
+                            className="flex items-center gap-2 px-2.5 sm:px-3 py-1.5 bg-[#ef3d2f] hover:bg-[#d8382b] text-white text-[11px] sm:text-xs font-black tracking-wide rounded border border-red-300/25 shadow-lg shadow-red-900/25 transition-all uppercase"
                         >
                             <Lock className="w-4 h-4" />
                             Salir

@@ -37,9 +37,9 @@ export default function AdminLoginPage() {
     };
 
     return (
-        <main className="min-h-screen bg-neutral-900 flex items-center justify-center p-4">
+        <main className="min-h-screen bg-neutral-900 flex items-center justify-center p-3 sm:p-4">
             <div className="w-full max-w-sm bg-neutral-800 rounded-2xl shadow-[0_0_40px_-10px_rgba(0,0,0,0.5)] border border-neutral-700 overflow-hidden">
-                <div className="px-6 py-8 text-center bg-gradient-to-br from-neutral-800 to-neutral-700 border-b border-neutral-700">
+                <div className="px-5 sm:px-6 py-7 sm:py-8 text-center bg-gradient-to-br from-neutral-800 to-neutral-700 border-b border-neutral-700">
                     <div className="w-12 h-12 bg-indigo-500/20 text-indigo-400 rounded-full flex items-center justify-center mx-auto mb-4 border border-indigo-500/30">
                         <Settings className="w-6 h-6" />
                     </div>
@@ -51,7 +51,7 @@ export default function AdminLoginPage() {
                     </p>
                 </div>
 
-                <form onSubmit={handleLogin} className="px-6 py-8 space-y-6">
+                <form onSubmit={handleLogin} className="px-5 sm:px-6 py-7 sm:py-8 space-y-6">
                     <div className="space-y-4">
                         <div>
                             <label
