@@ -13,6 +13,12 @@ declare global {
     var catalogCache: CatalogCache | undefined;
 }
 
+const getErrorMessage = (error: unknown): string => {
+    if (error instanceof Error) return error.message;
+    if (typeof error === "string") return error;
+    return "Unknown error";
+};
+
 const parseExcelBuffer = (buffer: Buffer): Product[] => {
     const workbook = xlsx.read(buffer, { type: "buffer" });
     const sheetName = workbook.SheetNames[0];
@@ -211,24 +217,67 @@ const loadProductsFromSupabase = async (): Promise<Product[] | null> => {
 };
 
 const saveProductsToSupabase = async (products: Product[]): Promise<void> => {
+    if (products.length === 0) {
+        throw new Error("El archivo de origen no contiene productos validos; se cancela la actualizacion para evitar borrar el catalogo.");
+    }
+
+    const rows = products.map(p => ({
+        codigo: p.codigo,
+        nombre: p.nombre,
+        precio: p.precio,
+        stock: p.stock,
+        lista: p.lista,
+    }));
+    const BATCH = 500;
+
+    const { data: backupRows, error: backupError } = await supabase
+        .from("products")
+        .select("*");
+
+    if (backupError) {
+        throw new Error(`No se pudo leer products antes de actualizar: ${backupError.message}`);
+    }
+
+    const { error: deleteError } = await supabase
+        .from("products")
+        .delete()
+        .neq("codigo", "");
+
+    if (deleteError) {
+        throw new Error(`No se pudo limpiar products antes de actualizar: ${deleteError.message}`);
+    }
+
     try {
-        await supabase.from("products").delete().neq("codigo", "");
-        if (products.length > 0) {
-            const rows = products.map(p => ({
-                codigo: p.codigo,
-                nombre: p.nombre,
-                precio: p.precio,
-                stock: p.stock,
-                lista: p.lista,
-            }));
-            // Insertar en lotes de 500 para evitar límites
-            const BATCH = 500;
-            for (let i = 0; i < rows.length; i += BATCH) {
-                await supabase.from("products").insert(rows.slice(i, i + BATCH));
+        for (let i = 0; i < rows.length; i += BATCH) {
+            const chunk = rows.slice(i, i + BATCH);
+            const { error: insertError } = await supabase.from("products").insert(chunk);
+            if (insertError) throw insertError;
+        }
+    } catch (insertErr) {
+        const insertMessage = getErrorMessage(insertErr);
+        console.error("Error guardando productos en Supabase:", insertMessage);
+
+        // Intentar rollback al estado anterior para evitar catalogo vacio.
+        const { error: clearRollbackError } = await supabase
+            .from("products")
+            .delete()
+            .neq("codigo", "");
+
+        if (clearRollbackError) {
+            throw new Error(`Fallo actualizacion de products (${insertMessage}) y no se pudo limpiar para rollback: ${clearRollbackError.message}`);
+        }
+
+        if (backupRows && backupRows.length > 0) {
+            for (let i = 0; i < backupRows.length; i += BATCH) {
+                const backupChunk = backupRows.slice(i, i + BATCH);
+                const { error: restoreError } = await supabase.from("products").insert(backupChunk);
+                if (restoreError) {
+                    throw new Error(`Fallo actualizacion de products (${insertMessage}) y rollback incompleto: ${restoreError.message}`);
+                }
             }
         }
-    } catch (err) {
-        console.error("Error guardando productos en Supabase:", err);
+
+        throw new Error(`Fallo actualizacion de products en Supabase: ${insertMessage}. Se restauro el catalogo anterior.`);
     }
 };
 
@@ -255,10 +304,26 @@ export const fetchSourceFile = async (forceRefresh = false): Promise<Product[]> 
     }
 
     try {
-        const defaultLocalUrl = path.join(process.cwd(), "..", "LISTA DE PRECIO LOCAL TACO RALO CATAMARCA.pdf");
-        const sourceUrl = process.env.SOURCE_FILE_URL || defaultLocalUrl;
+        const defaultFileName = "LISTA DE PRECIO LOCAL TACO RALO CATAMARCA.pdf";
+        const localCandidates = [
+            path.join(process.cwd(), defaultFileName),
+            path.join(process.cwd(), "..", defaultFileName),
+        ];
+        let defaultLocalUrl = localCandidates[0];
+        for (const candidate of localCandidates) {
+            try {
+                await fs.access(candidate);
+                defaultLocalUrl = candidate;
+                break;
+            } catch {
+                // Continuar buscando el archivo local de respaldo.
+            }
+        }
+
+        const sourceUrl = (process.env.SOURCE_FILE_URL || defaultLocalUrl).trim();
         let fileBuffer: Buffer;
-        const isPdf = process.env.SOURCE_FILE_TYPE === 'pdf' || defaultLocalUrl.toLowerCase().endsWith('.pdf');
+        const sourceType = (process.env.SOURCE_FILE_TYPE || "").toLowerCase();
+        const isPdf = sourceType ? sourceType === "pdf" : sourceUrl.toLowerCase().endsWith(".pdf");
 
         if (sourceUrl.startsWith('http')) {
             const opts: RequestInit = {};
@@ -330,3 +395,4 @@ export const loadFromBuffer = async (buffer: Buffer, type: "pdf" | "excel"): Pro
 
     return deduplicated.length;
 };
+

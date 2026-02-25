@@ -7,6 +7,12 @@ declare global {
     var clientsCache: ClientRecord[] | undefined;
 }
 
+const getErrorMessage = (error: unknown): string => {
+    if (error instanceof Error) return error.message;
+    if (typeof error === "string") return error;
+    return "Unknown error";
+};
+
 const rowToRegistration = (row: Record<string, unknown>): Registration => ({
     id: String(row.id),
     fecha: String(row.fecha),
@@ -190,13 +196,62 @@ export const loadClientsFromBuffer = async (buffer: Buffer): Promise<number> => 
             dniConyugue: String(row["DNI CONYUGUE"] || ""),
             telConyugue: String(row["TEL CONYUGUE"] || ""),
             zona: String(row["ZONA"] || ""),
-            nroCliente: String(row["N° CLIENTE"] || row["Nº CLIENTE"] || ""),
+            nroCliente: String(row["NÂ° CLIENTE"] || row["NÂº CLIENTE"] || ""),
         });
     });
 
-    await supabase.from("clients").delete().neq("nombre", "");
-    if (clients.length > 0) {
-        await supabase.from("clients").insert(clients.map(clientToRow));
+    if (clients.length === 0) {
+        throw new Error("El archivo de clientes no contiene filas validas; se cancela la actualizacion para evitar borrar clientes.");
+    }
+
+    const { data: backupRows, error: backupError } = await supabase
+        .from("clients")
+        .select("*");
+
+    if (backupError) {
+        throw new Error(`No se pudo leer clients antes de actualizar: ${backupError.message}`);
+    }
+
+    const { error: deleteError } = await supabase
+        .from("clients")
+        .delete()
+        .neq("nombre", "");
+
+    if (deleteError) {
+        throw new Error(`No se pudo limpiar clients antes de actualizar: ${deleteError.message}`);
+    }
+
+    const rowsToInsert = clients.map(clientToRow);
+    const BATCH = 500;
+    try {
+        for (let i = 0; i < rowsToInsert.length; i += BATCH) {
+            const chunk = rowsToInsert.slice(i, i + BATCH);
+            const { error: insertError } = await supabase.from("clients").insert(chunk);
+            if (insertError) throw insertError;
+        }
+    } catch (insertErr) {
+        const insertMessage = getErrorMessage(insertErr);
+
+        const { error: clearRollbackError } = await supabase
+            .from("clients")
+            .delete()
+            .neq("nombre", "");
+
+        if (clearRollbackError) {
+            throw new Error(`Fallo actualizacion de clients (${insertMessage}) y no se pudo limpiar para rollback: ${clearRollbackError.message}`);
+        }
+
+        if (backupRows && backupRows.length > 0) {
+            for (let i = 0; i < backupRows.length; i += BATCH) {
+                const backupChunk = backupRows.slice(i, i + BATCH);
+                const { error: restoreError } = await supabase.from("clients").insert(backupChunk);
+                if (restoreError) {
+                    throw new Error(`Fallo actualizacion de clients (${insertMessage}) y rollback incompleto: ${restoreError.message}`);
+                }
+            }
+        }
+
+        throw new Error(`Fallo actualizacion de clients en Supabase: ${insertMessage}. Se restauro la lista anterior.`);
     }
 
     global.clientsCache = clients;
