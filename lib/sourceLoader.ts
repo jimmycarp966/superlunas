@@ -13,6 +13,66 @@ const getErrorMessage = (error: unknown): string => {
     return "Unknown error";
 };
 
+type PdfLineItem = { x: number; text: string };
+
+const extractNumericToken = (text: string): string | null => {
+    const match = text.match(/-?\d[\d.,]*/);
+    return match ? match[0] : null;
+};
+
+const parseStockToken = (text: string): number | null => {
+    const trimmed = text.trim();
+    if (!/^-?\d+(?:[.,]\d+)?$/.test(trimmed)) return null;
+
+    const sign = trimmed.startsWith("-") ? -1 : 1;
+    const digits = trimmed.replace(/[^\d]/g, "");
+    if (!digits) return null;
+
+    const val = sign * parseInt(digits, 10);
+    if (!Number.isFinite(val) || Math.abs(val) > 9999) return null;
+    return val;
+};
+
+const pickBestPriceCandidate = (
+    items: PdfLineItem[],
+    fromIdx: number,
+    toExclusive: number,
+): { index: number; text: string } | null => {
+    const candidates: { index: number; text: string; value: number; score: number; negative: boolean }[] = [];
+
+    for (let i = fromIdx; i < toExclusive; i++) {
+        const text = items[i].text;
+        const token = extractNumericToken(text);
+        if (!token) continue;
+
+        const value = normalizePrice(token);
+        if (!Number.isFinite(value)) continue;
+
+        const digitsCount = token.replace(/[^\d]/g, "").length;
+        const negative = token.trim().startsWith("-");
+        let score = 0;
+
+        if (/\$/.test(text)) score += 2;
+        if (/[.,]/.test(token)) score += 1;
+        if (digitsCount >= 4) score += 3;
+        if (value >= 1000) score += 4;
+        if (value >= 100000) score += 2;
+        if (negative) score -= 10;
+
+        // En empates, prioriza valores hacia la derecha de la fila.
+        score += i / 1000;
+
+        candidates.push({ index: i, text, value, score, negative });
+    }
+
+    if (candidates.length === 0) return null;
+
+    const nonNegative = candidates.filter(c => !c.negative);
+    const pool = nonNegative.length > 0 ? nonNegative : candidates;
+    pool.sort((a, b) => b.score - a.score || b.value - a.value || b.index - a.index);
+    return { index: pool[0].index, text: pool[0].text };
+};
+
 const parseExcelBuffer = (buffer: Buffer): Product[] => {
     const workbook = xlsx.read(buffer, { type: "buffer" });
     const sheetName = workbook.SheetNames[0];
@@ -22,8 +82,11 @@ const parseExcelBuffer = (buffer: Buffer): Product[] => {
     return rawRows.map((row) => ({
         codigo: String(row.codigo || row.Codigo || "").trim(),
         nombre: String(row.nombre || row.Nombre || row.descripcion || "").trim(),
-        precio: normalizePrice(String(row.precio || row.Precio || "0")),
-        stock: Number(row.stock || row.Stock || 100),
+        precio: normalizePrice(String(row.precio ?? row.Precio ?? "0")),
+        stock: (() => {
+            const parsed = Number(row.stock ?? row.Stock);
+            return Number.isFinite(parsed) ? parsed : 100;
+        })(),
         lista: String(row.lista || row.Lista || "local").trim().toLowerCase(),
     })).filter(p => p.codigo !== "");
 };
@@ -114,9 +177,17 @@ const parsePdfBuffer = async (buffer: Buffer): Promise<Product[]> => {
 
                         const codigo = codigoItems.join("").trim();
                         const nombre = nombreItems.join(" ").trim();
-                        const rawPrecio = precioItems.find(p => /\d/.test(p)) || "0";
-                        const stockRaw = stockItems.length > 0 ? parseInt(stockItems[0]) : NaN;
-                        const stock = !isNaN(stockRaw) && stockRaw >= 0 ? stockRaw : 100;
+                        const precioAsItems = precioItems.map((text, index) => ({ x: index, text }));
+                        const rawPrecio = pickBestPriceCandidate(precioAsItems, 0, precioAsItems.length)?.text || "0";
+
+                        let stock = 100;
+                        for (let i = stockItems.length - 1; i >= 0; i--) {
+                            const parsed = parseStockToken(stockItems[i]);
+                            if (parsed !== null) {
+                                stock = parsed;
+                                break;
+                            }
+                        }
 
                         if (codigo && /^[a-zA-Z0-9-]{2,}$/.test(codigo) && nombre) {
                             products.push({
@@ -133,27 +204,26 @@ const parsePdfBuffer = async (buffer: Buffer): Promise<Product[]> => {
                         const codigoL = codigo.toLowerCase();
                         if (codigoL.includes("cod") || codigoL.includes("lista") || codigoL.includes("total")) continue;
 
-                        let rawPrecio = "0";
-                        let precioIdx = -1;
-                        for (let i = items.length - 1; i >= 2; i--) {
-                            const clean = items[i].text.replace(/[^\d.,]/g, "");
-                            if (clean.length >= 2 && /^\d/.test(clean)) {
-                                rawPrecio = items[i].text;
-                                precioIdx = i;
-                                break;
-                            }
-                        }
-
                         let stock = 100;
-                        for (let i = precioIdx + 1; i < items.length; i++) {
-                            const n = parseInt(items[i].text);
-                            if (!isNaN(n) && n >= 0 && n <= 9999) {
-                                stock = n;
+                        let stockIdx = -1;
+                        for (let i = items.length - 1; i >= 1; i--) {
+                            const parsed = parseStockToken(items[i].text);
+                            if (parsed !== null) {
+                                stock = parsed;
+                                stockIdx = i;
                                 break;
                             }
                         }
 
-                        const endNombre = precioIdx > 0 ? precioIdx : items.length - 1;
+                        const priceUpperBound = stockIdx > 1 ? stockIdx : items.length;
+                        const priceCandidate = pickBestPriceCandidate(items, 1, priceUpperBound);
+                        const rawPrecio = priceCandidate?.text || "0";
+                        const precioIdx = priceCandidate?.index ?? -1;
+
+                        let endNombre = precioIdx > 0 ? precioIdx : (stockIdx > 0 ? stockIdx : items.length);
+                        if (endNombre > 1 && items[endNombre - 1].text.trim() === "$") {
+                            endNombre -= 1;
+                        }
                         const nombre = items.slice(1, endNombre).map(i => i.text).join(" ").trim();
 
                         if (/^[a-zA-Z0-9-]{3,}$/.test(codigo) && nombre) {
@@ -176,7 +246,7 @@ const parsePdfBuffer = async (buffer: Buffer): Promise<Product[]> => {
     });
 };
 
-const normalizePrice = (rawVal: string): number => {
+function normalizePrice(rawVal: string): number {
     let clean = rawVal.replace(/[^\d.,]/g, "");
 
     if (clean.length > 3 && clean[clean.length - 3] === ',') {
@@ -188,7 +258,7 @@ const normalizePrice = (rawVal: string): number => {
     }
 
     return parseFloat(clean) || 0;
-};
+}
 
 const loadProductsFromSupabase = async (): Promise<Product[] | null> => {
     try {
