@@ -42,6 +42,7 @@ export default function AdminPanel() {
     const [clientsSearch, setClientsSearch] = useState("");
     const [clientsPage, setClientsPage] = useState(0);
     const [loadingClients, setLoadingClients] = useState(false);
+    const [expandedClientNombre, setExpandedClientNombre] = useState<string | null>(null);
 
     // Catálogo - borrar
     const [clearingCatalog, setClearingCatalog] = useState(false);
@@ -276,8 +277,11 @@ export default function AdminPanel() {
         return allClients.filter(c =>
             c.nombre?.toLowerCase().includes(q) ||
             c.dni?.toLowerCase().includes(q) ||
+            c.nroCliente?.toLowerCase().includes(q) ||
+            c.telefono?.toLowerCase().includes(q) ||
             c.localidad?.toLowerCase().includes(q) ||
-            c.zona?.toLowerCase().includes(q)
+            c.zona?.toLowerCase().includes(q) ||
+            c.rubro?.toLowerCase().includes(q)
         );
     }, [allClients, clientsSearch]);
 
@@ -958,29 +962,69 @@ export default function AdminPanel() {
                                         {paginatedClients.length === 0 ? (
                                             <p className="text-neutral-500 text-sm py-4 text-center">Sin resultados para esa búsqueda.</p>
                                         ) : (
-                                            <div className="overflow-x-auto">
+                                            <div className="overflow-x-auto rounded-xl border border-neutral-800">
                                                 <table className="w-full text-sm">
                                                     <thead>
-                                                        <tr className="border-b border-neutral-800">
-                                                            <th className="text-left px-3 py-2 text-neutral-500 font-medium text-xs">Nombre</th>
-                                                            <th className="text-left px-3 py-2 text-neutral-500 font-medium text-xs">DNI</th>
-                                                            <th className="text-left px-3 py-2 text-neutral-500 font-medium text-xs">Teléfono</th>
-                                                            <th className="text-left px-3 py-2 text-neutral-500 font-medium text-xs">Localidad</th>
-                                                            <th className="text-left px-3 py-2 text-neutral-500 font-medium text-xs">Zona</th>
-                                                            <th className="text-left px-3 py-2 text-neutral-500 font-medium text-xs">N° Cliente</th>
+                                                        <tr className="bg-neutral-800/60 border-b border-neutral-700">
+                                                            <th className="text-left px-4 py-2.5 text-neutral-400 font-semibold text-xs uppercase tracking-wide">Nombre</th>
+                                                            <th className="text-left px-4 py-2.5 text-neutral-400 font-semibold text-xs uppercase tracking-wide">N° Cliente</th>
+                                                            <th className="text-left px-4 py-2.5 text-neutral-400 font-semibold text-xs uppercase tracking-wide">Teléfono</th>
+                                                            <th className="text-left px-4 py-2.5 text-neutral-400 font-semibold text-xs uppercase tracking-wide">Localidad</th>
+                                                            <th className="text-left px-4 py-2.5 text-neutral-400 font-semibold text-xs uppercase tracking-wide">Zona</th>
+                                                            <th className="text-left px-4 py-2.5 text-neutral-400 font-semibold text-xs uppercase tracking-wide">Rubro</th>
+                                                            <th className="w-8"></th>
                                                         </tr>
                                                     </thead>
                                                     <tbody>
-                                                        {paginatedClients.map((c, i) => (
-                                                            <tr key={i} className="border-b border-neutral-800/60 hover:bg-neutral-800/30">
-                                                                <td className="px-3 py-2 text-white font-medium">{c.nombre}</td>
-                                                                <td className="px-3 py-2 text-neutral-400">{c.dni || "—"}</td>
-                                                                <td className="px-3 py-2 text-neutral-400">{c.telefono || "—"}</td>
-                                                                <td className="px-3 py-2 text-neutral-400">{c.localidad || "—"}</td>
-                                                                <td className="px-3 py-2 text-neutral-400">{c.zona || "—"}</td>
-                                                                <td className="px-3 py-2 text-neutral-400">{c.nroCliente || "—"}</td>
-                                                            </tr>
-                                                        ))}
+                                                        {paginatedClients.map((c, i) => {
+                                                            const isExpanded = expandedClientNombre === c.nombre;
+                                                            return (
+                                                                <>
+                                                                    <tr
+                                                                        key={`${i}-row`}
+                                                                        onClick={() => setExpandedClientNombre(isExpanded ? null : c.nombre)}
+                                                                        className={`border-b border-neutral-800/60 cursor-pointer transition-colors ${isExpanded ? "bg-indigo-500/5 border-indigo-500/20" : "hover:bg-neutral-800/40"}`}
+                                                                    >
+                                                                        <td className="px-4 py-3 text-white font-semibold whitespace-nowrap">{c.nombre}</td>
+                                                                        <td className="px-4 py-3 text-indigo-300 text-xs font-mono">{c.nroCliente || "—"}</td>
+                                                                        <td className="px-4 py-3 text-neutral-300">{c.telefono || "—"}</td>
+                                                                        <td className="px-4 py-3 text-neutral-300">{c.localidad || "—"}</td>
+                                                                        <td className="px-4 py-3 text-neutral-400">{c.zona || "—"}</td>
+                                                                        <td className="px-4 py-3 text-neutral-400">{c.rubro || "—"}</td>
+                                                                        <td className="px-4 py-3">
+                                                                            <ChevronRight className={`w-4 h-4 text-neutral-500 transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`} />
+                                                                        </td>
+                                                                    </tr>
+                                                                    {isExpanded && (
+                                                                        <tr key={`${i}-expanded`} className="bg-neutral-900/60 border-b border-neutral-800">
+                                                                            <td colSpan={7} className="px-4 py-4">
+                                                                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                                                                                    {[
+                                                                                        ["Nombre", c.nombre],
+                                                                                        ["N° Cliente", c.nroCliente],
+                                                                                        ["DNI", c.dni],
+                                                                                        ["Teléfono", c.telefono],
+                                                                                        ["Localidad", c.localidad],
+                                                                                        ["Zona", c.zona],
+                                                                                        ["Rubro", c.rubro],
+                                                                                        ["Dom. Comercial", c.domCom],
+                                                                                        ["Dom. Particular", c.domPar],
+                                                                                        ["Cónyuge", c.conyugue],
+                                                                                        ["DNI Cónyuge", c.dniConyugue],
+                                                                                        ["Tel. Cónyuge", c.telConyugue],
+                                                                                    ].map(([label, value]) => (
+                                                                                        <div key={label} className="bg-neutral-800 rounded-lg px-3 py-2 border border-neutral-700/60">
+                                                                                            <p className="text-neutral-500 text-[10px] uppercase tracking-wide mb-0.5">{label}</p>
+                                                                                            <p className="text-neutral-200 text-xs font-medium break-words">{value || "—"}</p>
+                                                                                        </div>
+                                                                                    ))}
+                                                                                </div>
+                                                                            </td>
+                                                                        </tr>
+                                                                    )}
+                                                                </>
+                                                            );
+                                                        })}
                                                     </tbody>
                                                 </table>
                                             </div>
