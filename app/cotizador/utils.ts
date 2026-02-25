@@ -92,7 +92,6 @@ export const generatePresupuestoText = (
         } else {
             lines.push(`* ${p.semanas} SEMANAS`);
             if (p.primeraCuotaPaga) {
-                lines.push(`  1ra cuota paga ($ ${formatARS(p.cuota)})`);
                 lines.push(`  Quedan ${p.cuotasPendientes} cuotas de $ ${formatARS(p.cuota)}`);
                 lines.push(`  Saldo restante: $ ${formatARS(p.saldo)}`);
             } else {
@@ -130,15 +129,13 @@ export const generateNotaPedidoText = (
 
     let planLine = "";
     let totalLine = "";
-    let primeraCuotaLine = "";
     if (plan) {
         if (plan.semanas === 0) {
             planLine = `CONTADO (1 pago de $${formatARS(plan.calcTotal)})`;
             totalLine = formatARS(plan.calcTotal);
         } else {
             if (plan.primeraCuotaPaga) {
-                planLine = `${plan.semanas} SEMANAS (1RA PAGA + ${plan.cuotasPendientes} de $${formatARS(plan.cuota)})`;
-                primeraCuotaLine = `PRIMERA CUOTA PAGADA : $${formatARS(plan.cuota)}`;
+                planLine = `${plan.semanas} SEMANAS (${plan.cuotasPendientes} de $${formatARS(plan.cuota)})`;
                 totalLine = formatARS(plan.saldo);
             } else {
                 planLine = `${plan.semanas} SEMANAS (${plan.semanas} de $${formatARS(plan.cuota)})`;
@@ -168,7 +165,6 @@ export const generateNotaPedidoText = (
         `>> PRODUCTO : ${calc.itemsText}`,
         `    PLAN : ${planLine}`,
         `    TOTAL VENTA (FINAL) : $${totalLine}`,
-        primeraCuotaLine ? `    ${primeraCuotaLine}` : "",
         ``,
         `ANTICIPO : $ ${calc.anticipo > 0 ? formatARS(calc.anticipo) : ""}`,
         todayStr(),

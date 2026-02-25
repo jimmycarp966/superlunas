@@ -66,7 +66,7 @@ interface ColProps {
     products: any[];
     plans: any[];
     settings: any;
-    onFicha: (calc: any) => void;
+    onFicha: (calc: any & { selectedPlanId?: string }) => void;
 }
 
 function CotizadorCol({ products, plans, settings, onFicha }: ColProps) {
@@ -76,6 +76,7 @@ function CotizadorCol({ products, plans, settings, onFicha }: ColProps) {
     const [anticipo, setAnticipo] = useState(0);
     const [copied, setCopied] = useState(false);
     const [primeraCuotaMap, setPrimeraCuotaMap] = useState<Record<string, boolean>>({});
+    const [selectedPlanId, setSelectedPlanId] = useState("");
 
     useEffect(() => {
         if (!product) return;
@@ -101,6 +102,11 @@ function CotizadorCol({ products, plans, settings, onFicha }: ColProps) {
                 if (checked && validIds.has(id)) next[id] = true;
             }
             return next;
+        });
+
+        setSelectedPlanId((prev) => {
+            if (prev && validIds.has(String(prev))) return String(prev);
+            return plans[0] ? String(plans[0].id) : "";
         });
     }, [plans]);
 
@@ -135,6 +141,7 @@ function CotizadorCol({ products, plans, settings, onFicha }: ColProps) {
         setAnticipo(0);
         setSearch("");
         setPrimeraCuotaMap({});
+        setSelectedPlanId(plans[0] ? String(plans[0].id) : "");
     };
 
     const handleStock = () => {
@@ -224,7 +231,18 @@ function CotizadorCol({ products, plans, settings, onFicha }: ColProps) {
 
             <div className="grid grid-cols-2 gap-2">
                 <button
-                    onClick={() => onFicha(calc)}
+                    onClick={() => {
+                        const selectedFromCuota = calc.planStats.find((p: any) => Boolean(p.primeraCuotaPaga));
+                        const selectedFromState = calc.planStats.find((p: any) => String(p.id) === String(selectedPlanId));
+                        const fallback = calc.planStats[0];
+                        const resolvedPlanId =
+                            String(selectedFromCuota?.id ?? selectedFromState?.id ?? fallback?.id ?? "");
+
+                        onFicha({
+                            ...calc,
+                            selectedPlanId: resolvedPlanId,
+                        });
+                    }}
                     className="bg-[#47d98a] hover:bg-[#3fc57c] text-white font-black py-2 rounded-md text-[12px] uppercase tracking-wide flex items-center justify-center gap-1.5"
                 >
                     <ClipboardList className="w-4 h-4" /> Ficha
@@ -273,9 +291,10 @@ function CotizadorCol({ products, plans, settings, onFicha }: ColProps) {
                         <PlanCard
                             key={p.id}
                             p={p}
-                            onTogglePrimeraCuota={(planId, checked) =>
-                                setPrimeraCuotaMap((prev) => ({ ...prev, [planId]: checked }))
-                            }
+                            onTogglePrimeraCuota={(planId, checked) => {
+                                setPrimeraCuotaMap((prev) => ({ ...prev, [planId]: checked }));
+                                if (checked) setSelectedPlanId(String(planId));
+                            }}
                         />
                     ))}
                 </div>

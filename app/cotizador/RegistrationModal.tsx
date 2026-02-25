@@ -7,7 +7,13 @@ import { generateNotaPedidoText, planToText, formatARS } from "./utils";
 import type { ClientRecord } from "@/lib/types";
 
 interface Props {
-    calc: { subtotal: number; anticipo: number; itemsText: string; planStats: any[] };
+    calc: {
+        subtotal: number;
+        anticipo: number;
+        itemsText: string;
+        planStats: any[];
+        selectedPlanId?: string;
+    };
     colLabel: string;
     onClose: () => void;
 }
@@ -78,12 +84,22 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
     }, []);
 
     useEffect(() => {
-        if (calc.planStats.length > 0 && !selectedPlanId) {
-            setSelectedPlanId(calc.planStats[0].id);
+        const availableIds = calc.planStats.map((p) => String(p.id));
+        if (availableIds.length === 0) {
+            setSelectedPlanId("");
+            return;
         }
-    }, [calc.planStats, selectedPlanId]);
 
-    const selectedPlan = calc.planStats.find(p => p.id === selectedPlanId);
+        const preferredId = String(calc.selectedPlanId || "");
+        setSelectedPlanId((prev) => {
+            const prevId = String(prev || "");
+            if (preferredId && availableIds.includes(preferredId)) return preferredId;
+            if (prevId && availableIds.includes(prevId)) return prevId;
+            return availableIds[0];
+        });
+    }, [calc.planStats, calc.selectedPlanId]);
+
+    const selectedPlan = calc.planStats.find(p => String(p.id) === String(selectedPlanId));
 
     const getAnticipoFinal = useCallback((plan: any | undefined): number => {
         const anticipoManual = Math.max(0, Number(calc.anticipo) || 0);
@@ -383,8 +399,8 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
                             <p className="text-xs text-neutral-500 mb-2 font-medium uppercase tracking-wide">Plan de pago</p>
                             <div className="space-y-2">
                                 {calc.planStats.map(p => (
-                                    <label key={p.id} className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${selectedPlanId === p.id ? "border-indigo-500 bg-indigo-500/10" : "border-neutral-700 bg-neutral-800 hover:border-neutral-600"}`}>
-                                        <input type="radio" name="plan" value={p.id} checked={selectedPlanId === p.id} onChange={() => setSelectedPlanId(p.id)} className="mt-0.5 accent-indigo-500" />
+                                    <label key={p.id} className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${String(selectedPlanId) === String(p.id) ? "border-indigo-500 bg-indigo-500/10" : "border-neutral-700 bg-neutral-800 hover:border-neutral-600"}`}>
+                                        <input type="radio" name="plan" value={p.id} checked={String(selectedPlanId) === String(p.id)} onChange={() => setSelectedPlanId(String(p.id))} className="mt-0.5 accent-indigo-500" />
                                         <div className="flex-1 min-w-0">
                                             <div className="text-sm text-white font-medium">{p.nombre}</div>
                                             {p.semanas === 0
