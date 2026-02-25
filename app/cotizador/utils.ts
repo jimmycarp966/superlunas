@@ -3,25 +3,61 @@
 export const formatARS = (n: number): string =>
     Math.round(n).toLocaleString("es-AR");
 
-export function calcPlanStats(subtotal: number, anticipo: number, plans: any[], settings: any) {
-    const round = (num: number, dec: number) => Math.round(num * Math.pow(10, dec)) / Math.pow(10, dec);
-    const rdTotal = settings?.redondeoTotal ?? 2;
-    const rdCuota = settings?.redondeoCuota ?? 2;
-    return plans.map(p => {
+const roundUpToHundred = (value: number): number => {
+    if (!Number.isFinite(value) || value <= 0) return 0;
+    return Math.ceil(value / 100) * 100;
+};
+
+export function calcPlanStats(
+    subtotal: number,
+    anticipo: number,
+    plans: any[],
+    _settings: any,
+    primeraCuotaMap: Record<string, boolean> = {}
+) {
+    return plans.map((p) => {
         const rawRate = Number(p.tasaPorcentaje);
         const rate = Number.isFinite(rawRate) ? rawRate : 0;
+        const semanas = Number(p.semanas) || 0;
         const baseConAnticipo = Math.max(0, subtotal - anticipo);
-        let calcTotal = baseConAnticipo * (1 + rate / 100);
-        calcTotal = round(calcTotal, rdTotal);
-        const saldo = calcTotal;
-        const cuota = p.semanas > 0 ? round(saldo / p.semanas, rdCuota) : saldo;
-        return { ...p, calcTotal, saldo, cuota };
+        const totalBase = roundUpToHundred(baseConAnticipo * (1 + rate / 100));
+
+        if (semanas <= 0) {
+            return {
+                ...p,
+                calcTotal: totalBase,
+                saldo: totalBase,
+                cuota: totalBase,
+                primeraCuotaPaga: false,
+                cuotasPendientes: 0,
+                pagoInicial: 0,
+            };
+        }
+
+        const cuota = roundUpToHundred(totalBase / semanas);
+        const calcTotal = cuota * semanas;
+        const primeraCuotaPaga = Boolean(primeraCuotaMap[String(p.id)]);
+        const cuotasPendientes = primeraCuotaPaga ? Math.max(0, semanas - 1) : semanas;
+        const pagoInicial = primeraCuotaPaga ? cuota : 0;
+        const saldo = primeraCuotaPaga ? Math.max(0, calcTotal - pagoInicial) : calcTotal;
+
+        return {
+            ...p,
+            calcTotal,
+            saldo,
+            cuota,
+            primeraCuotaPaga,
+            cuotasPendientes,
+            pagoInicial,
+        };
     });
 }
 
 export const planToText = (p: any): string => {
     if (p.semanas === 0) return `CONTADO ($${formatARS(p.calcTotal)})`;
-    let t = `${p.semanas} SEMANAS (${p.semanas} de $${formatARS(p.cuota)})`;
+    let t = p.primeraCuotaPaga
+        ? `${p.semanas} SEMANAS (1RA PAGA + ${p.cuotasPendientes} de $${formatARS(p.cuota)})`
+        : `${p.semanas} SEMANAS (${p.semanas} de $${formatARS(p.cuota)})`;
     if (p.badge) t += ` (${p.badge.toUpperCase()})`;
     return t;
 };
@@ -55,7 +91,13 @@ export const generatePresupuestoText = (
             lines.push(`  Un pago de $ ${formatARS(p.calcTotal)}`);
         } else {
             lines.push(`* ${p.semanas} SEMANAS`);
-            lines.push(`  ${p.semanas} semanas de $ ${formatARS(p.cuota)}`);
+            if (p.primeraCuotaPaga) {
+                lines.push(`  1ra cuota paga ($ ${formatARS(p.cuota)})`);
+                lines.push(`  Quedan ${p.cuotasPendientes} cuotas de $ ${formatARS(p.cuota)}`);
+                lines.push(`  Saldo restante: $ ${formatARS(p.saldo)}`);
+            } else {
+                lines.push(`  ${p.semanas} semanas de $ ${formatARS(p.cuota)}`);
+            }
         }
         lines.push("");
     }
@@ -88,13 +130,21 @@ export const generateNotaPedidoText = (
 
     let planLine = "";
     let totalLine = "";
+    let primeraCuotaLine = "";
     if (plan) {
         if (plan.semanas === 0) {
             planLine = `CONTADO (1 pago de $${formatARS(plan.calcTotal)})`;
+            totalLine = formatARS(plan.calcTotal);
         } else {
-            planLine = `${plan.semanas} SEMANAS (${plan.semanas} de $${formatARS(plan.cuota)})`;
+            if (plan.primeraCuotaPaga) {
+                planLine = `${plan.semanas} SEMANAS (1RA PAGA + ${plan.cuotasPendientes} de $${formatARS(plan.cuota)})`;
+                primeraCuotaLine = `PRIMERA CUOTA PAGADA : $${formatARS(plan.cuota)}`;
+                totalLine = formatARS(plan.saldo);
+            } else {
+                planLine = `${plan.semanas} SEMANAS (${plan.semanas} de $${formatARS(plan.cuota)})`;
+                totalLine = formatARS(plan.calcTotal);
+            }
         }
-        totalLine = formatARS(plan.calcTotal);
     }
 
     const nroStr = opts.nroCliente ? ` [CLIENTE Nº: ${opts.nroCliente}]` : "";
@@ -118,8 +168,9 @@ export const generateNotaPedidoText = (
         `>> PRODUCTO : ${calc.itemsText}`,
         `    PLAN : ${planLine}`,
         `    TOTAL VENTA (FINAL) : $${totalLine}`,
+        primeraCuotaLine ? `    ${primeraCuotaLine}` : "",
         ``,
         `ANTICIPO : $ ${calc.anticipo > 0 ? formatARS(calc.anticipo) : ""}`,
         todayStr(),
-    ].join("\n");
+    ].filter(Boolean).join("\n");
 };

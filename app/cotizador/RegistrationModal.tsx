@@ -117,6 +117,18 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
         return () => document.removeEventListener("mousedown", handler);
     }, []);
 
+    useEffect(() => {
+        if (typeof document === "undefined") return;
+        const prevBodyOverflow = document.body.style.overflow;
+        const prevHtmlOverflow = document.documentElement.style.overflow;
+        document.body.style.overflow = "hidden";
+        document.documentElement.style.overflow = "hidden";
+        return () => {
+            document.body.style.overflow = prevBodyOverflow;
+            document.documentElement.style.overflow = prevHtmlOverflow;
+        };
+    }, []);
+
     const filteredClients = useCallback(() => {
         if (clientSearch.length < 2) return [];
         const q = clientSearch.toLowerCase();
@@ -160,7 +172,9 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
         setSaving(true);
         try {
             const planText = selectedPlan ? planToText(selectedPlan) : "";
-            const totalText = selectedPlan ? formatARS(selectedPlan.calcTotal) : "";
+            const totalText = selectedPlan
+                ? formatARS(selectedPlan.primeraCuotaPaga ? selectedPlan.saldo : selectedPlan.calcTotal)
+                : "";
             const body = {
                 vendedor,
                 zona: form.zona,
@@ -205,7 +219,7 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
     const inp = "w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-indigo-500";
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-sm overscroll-contain">
             <div className="w-full max-w-4xl bg-neutral-900 border border-neutral-800 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[96vh]">
 
                 {/* Header */}
@@ -219,10 +233,10 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
                     </button>
                 </div>
 
-                <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
+                <div className="flex flex-col lg:flex-row flex-1 overflow-y-auto lg:overflow-hidden">
 
                     {/* Left: form */}
-                    <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3 border-b border-neutral-800 lg:border-b-0 lg:border-r">
+                    <div className="flex-1 lg:overflow-y-auto p-4 sm:p-5 space-y-3 border-b border-neutral-800 lg:border-b-0 lg:border-r">
 
                         {/* Vendedor */}
                         <div>
@@ -331,7 +345,7 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
                     </div>
 
                     {/* Right: plan selector + preview */}
-                    <div className="w-full lg:w-80 flex flex-col p-4 sm:p-5 gap-4 overflow-y-auto shrink-0">
+                    <div className="w-full lg:w-80 flex flex-col p-4 sm:p-5 gap-4 lg:overflow-y-auto shrink-0">
 
                         {/* Plan */}
                         <div>
@@ -344,7 +358,9 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
                                             <div className="text-sm text-white font-medium">{p.nombre}</div>
                                             {p.semanas === 0
                                                 ? <div className="text-emerald-400 text-xs font-semibold">$ {formatARS(p.calcTotal)}</div>
-                                                : <div className="text-xs text-neutral-400">{p.semanas} × <span className="text-emerald-400 font-semibold">$ {formatARS(p.cuota)}</span><span className="text-neutral-500"> = $ {formatARS(p.calcTotal)}</span></div>
+                                                : p.primeraCuotaPaga
+                                                    ? <div className="text-xs text-neutral-400">1ra paga + {p.cuotasPendientes} x <span className="text-emerald-400 font-semibold">$ {formatARS(p.cuota)}</span><span className="text-neutral-500"> · saldo $ {formatARS(p.saldo)}</span></div>
+                                                    : <div className="text-xs text-neutral-400">{p.semanas} x <span className="text-emerald-400 font-semibold">$ {formatARS(p.cuota)}</span><span className="text-neutral-500"> = $ {formatARS(p.calcTotal)}</span></div>
                                             }
                                             {p.badge && <span className="text-xs bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded-full">{p.badge}</span>}
                                         </div>

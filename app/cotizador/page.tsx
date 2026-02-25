@@ -9,7 +9,13 @@ import RegistrationModal from "./RegistrationModal";
 const PLANS_SYNC_CHANNEL = "plans-updates";
 const PLANS_SYNC_STORAGE_KEY = "lunas_plans_updated_at";
 
-function PlanCard({ p }: { p: any }) {
+function PlanCard({
+    p,
+    onTogglePrimeraCuota,
+}: {
+    p: any;
+    onTogglePrimeraCuota: (planId: string, checked: boolean) => void;
+}) {
     const isContado = p.semanas === 0;
     const cardClass = isContado
         ? "border-[#596474] bg-[#3f4855]"
@@ -17,6 +23,7 @@ function PlanCard({ p }: { p: any }) {
     const titleClass = isContado ? "text-[#d8deea]" : "text-[#ffc64f]";
     const amountClass = isContado ? "text-white" : "text-[#ffd661]";
     const subtitleClass = isContado ? "text-[#d8deea]" : "text-[#dbe0ff]";
+    const totalMostrado = p.primeraCuotaPaga ? p.saldo : p.calcTotal;
 
     return (
         <div className={`rounded-lg border overflow-hidden relative ${cardClass}`}>
@@ -30,13 +37,26 @@ function PlanCard({ p }: { p: any }) {
             </div>
             <div className="px-3 pb-2">
                 <div className={`text-[27px] sm:text-[34px] leading-none font-extrabold ${amountClass}`}>
-                    ${formatARS(p.calcTotal)}
+                    ${formatARS(totalMostrado)}
                 </div>
                 <div className={`text-[12px] sm:text-[13px] font-semibold mt-1 ${subtitleClass}`}>
                     {isContado
                         ? `1 cuota de $ ${formatARS(p.calcTotal)}`
-                        : `${p.semanas} cuotas de $ ${formatARS(p.cuota)}`}
+                        : p.primeraCuotaPaga
+                            ? `1ra paga · quedan ${p.cuotasPendientes} de $ ${formatARS(p.cuota)}`
+                            : `${p.semanas} cuotas de $ ${formatARS(p.cuota)}`}
                 </div>
+                {!isContado && (
+                    <label className="mt-1.5 inline-flex items-center gap-1.5 text-[10px] sm:text-[11px] text-white/90 font-bold uppercase tracking-wide cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={Boolean(p.primeraCuotaPaga)}
+                            onChange={(e) => onTogglePrimeraCuota(String(p.id), e.target.checked)}
+                            className="accent-emerald-500 w-3.5 h-3.5"
+                        />
+                        Paga 1ra cuota
+                    </label>
+                )}
             </div>
         </div>
     );
@@ -54,6 +74,8 @@ function CotizadorCol({ products, plans, settings, onFicha }: ColProps) {
     const [product, setProduct] = useState<any | null>(null);
     const [qty, setQty] = useState(1);
     const [anticipo, setAnticipo] = useState(0);
+    const [copied, setCopied] = useState(false);
+    const [primeraCuotaMap, setPrimeraCuotaMap] = useState<Record<string, boolean>>({});
 
     useEffect(() => {
         if (!product) return;
@@ -70,6 +92,17 @@ function CotizadorCol({ products, plans, settings, onFicha }: ColProps) {
             setProduct(updated);
         }
     }, [products, product]);
+
+    useEffect(() => {
+        const validIds = new Set(plans.map((p: any) => String(p.id)));
+        setPrimeraCuotaMap((prev) => {
+            const next: Record<string, boolean> = {};
+            for (const [id, checked] of Object.entries(prev)) {
+                if (checked && validIds.has(id)) next[id] = true;
+            }
+            return next;
+        });
+    }, [plans]);
 
     const filtered = useMemo(() => {
         const q = search.toLowerCase().trim();
@@ -91,20 +124,31 @@ function CotizadorCol({ products, plans, settings, onFicha }: ColProps) {
         return {
             subtotal,
             anticipo,
-            planStats: calcPlanStats(subtotal, anticipo, plans, settings),
+            planStats: calcPlanStats(subtotal, anticipo, plans, settings, primeraCuotaMap),
             itemsText,
         };
-    }, [product, qty, anticipo, plans, settings]);
+    }, [product, qty, anticipo, plans, settings, primeraCuotaMap]);
 
     const handleLimpiar = () => {
         setProduct(null);
         setQty(1);
         setAnticipo(0);
         setSearch("");
+        setPrimeraCuotaMap({});
     };
 
     const handleStock = () => {
         if (product) alert(`Stock de "${product.nombre}": ${product.stock} unidades`);
+    };
+
+    const handleCopyPresupuesto = async () => {
+        try {
+            await navigator.clipboard.writeText(generatePresupuestoText(calc));
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1800);
+        } catch {
+            setCopied(false);
+        }
     };
 
     return (
@@ -186,12 +230,18 @@ function CotizadorCol({ products, plans, settings, onFicha }: ColProps) {
                     <ClipboardList className="w-4 h-4" /> Ficha
                 </button>
                 <button
-                    onClick={() => navigator.clipboard.writeText(generatePresupuestoText(calc))}
+                    onClick={handleCopyPresupuesto}
                     className="bg-[#29b4f0] hover:bg-[#239dd1] text-white font-black py-2 rounded-md text-[12px] uppercase tracking-wide flex items-center justify-center gap-1.5"
                 >
                     <ClipboardList className="w-4 h-4" /> Copiar
                 </button>
             </div>
+
+            {copied && (
+                <div className="bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold rounded-md px-2.5 py-1.5 text-center">
+                    Mensaje copiado
+                </div>
+            )}
 
             {product ? (
                 <div className="bg-[#0f1724] border border-[#f0a12e] rounded-lg px-3 py-2.5">
@@ -220,7 +270,13 @@ function CotizadorCol({ products, plans, settings, onFicha }: ColProps) {
             {calc.subtotal > 0 && (
                 <div className="flex flex-col gap-2">
                     {calc.planStats.map((p: any) => (
-                        <PlanCard key={p.id} p={p} />
+                        <PlanCard
+                            key={p.id}
+                            p={p}
+                            onTogglePrimeraCuota={(planId, checked) =>
+                                setPrimeraCuotaMap((prev) => ({ ...prev, [planId]: checked }))
+                            }
+                        />
                     ))}
                 </div>
             )}
