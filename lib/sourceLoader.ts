@@ -266,7 +266,7 @@ const loadProductsFromSupabase = async (): Promise<Product[] | null> => {
             .from("products")
             .select("*");
 
-        if (error || !data || data.length === 0) return null;
+        if (error || !data) return null;
 
         return (data as Record<string, unknown>[]).map(row => ({
             codigo: String(row.codigo),
@@ -346,12 +346,15 @@ const saveProductsToSupabase = async (products: Product[]): Promise<void> => {
 };
 
 export const fetchSourceFile = async (forceRefresh = false): Promise<Product[]> => {
-    // Cold start: intentar cargar desde Supabase sin re-parsear el archivo
+    // Flujo normal: leer SIEMPRE desde Supabase, incluso si esta vacio.
+    // Solo se re-parsea fuente cuando forceRefresh=true (boton Recargar/Subir).
     if (!forceRefresh) {
         const fromDb = await loadProductsFromSupabase();
-        if (fromDb && fromDb.length > 0) {
+        if (fromDb !== null) {
             return fromDb;
         }
+
+        throw new Error("No se pudo leer el catalogo desde Supabase.");
     }
 
     try {
