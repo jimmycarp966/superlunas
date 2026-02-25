@@ -6,38 +6,39 @@ import { ClipboardList, RotateCcw, Check } from "lucide-react";
 import { calcPlanStats, generatePresupuestoText, formatARS } from "./utils";
 import RegistrationModal from "./RegistrationModal";
 
-// ─── Plan card ────────────────────────────────────────────────────────────────
 function PlanCard({ p }: { p: any }) {
     const isContado = p.semanas === 0;
-    const hasBadge = !!p.badge;
-    const headerClass = isContado ? "bg-green-700" : hasBadge ? "bg-orange-600" : "bg-blue-700";
+    const cardClass = isContado
+        ? "border-[#596474] bg-[#3f4855]"
+        : "border-[#f0a12e] bg-[#2f3cad]";
+    const titleClass = isContado ? "text-[#d8deea]" : "text-[#ffc64f]";
+    const amountClass = isContado ? "text-white" : "text-[#ffd661]";
+    const subtitleClass = isContado ? "text-[#d8deea]" : "text-[#dbe0ff]";
+
     return (
-        <div className="rounded-xl overflow-hidden border border-[#2a2f3e]">
-            <div className={`${headerClass} px-3 py-1.5 flex items-center justify-between`}>
-                <span className="text-white font-extrabold text-xs uppercase tracking-wider">
-                    {isContado ? "CONTADO" : `${p.semanas} SEMANAS`}
+        <div className={`rounded-lg border overflow-hidden relative ${cardClass}`}>
+            {!isContado && p.badge && (
+                <span className="absolute top-1.5 right-1.5 bg-[#f04a40] text-white text-[9px] px-2 py-[1px] rounded-full uppercase font-black tracking-wide">
+                    {p.badge}
                 </span>
-                {hasBadge && (
-                    <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">
-                        {p.badge}
-                    </span>
-                )}
+            )}
+            <div className={`px-3 pt-2 pb-1 text-[11px] font-black uppercase tracking-wide ${titleClass}`}>
+                {isContado ? "Contado" : `${p.semanas} semanas`}
             </div>
-            <div className="bg-[#131929] px-3 py-2">
-                <div className="text-white font-extrabold text-xl leading-tight">
+            <div className="px-3 pb-2">
+                <div className={`text-[34px] leading-none font-extrabold ${amountClass}`}>
                     ${formatARS(p.calcTotal)}
                 </div>
-                <div className="text-gray-400 text-xs mt-0.5">
+                <div className={`text-[13px] font-semibold mt-1 ${subtitleClass}`}>
                     {isContado
-                        ? `1 cuota de $${formatARS(p.calcTotal)}`
-                        : `${p.semanas} cuotas de $${formatARS(p.cuota)}`}
+                        ? `1 cuota de $ ${formatARS(p.calcTotal)}`
+                        : `${p.semanas} cuotas de $ ${formatARS(p.cuota)}`}
                 </div>
             </div>
         </div>
     );
 }
 
-// ─── Columna individual ───────────────────────────────────────────────────────
 interface ColProps {
     products: any[];
     plans: any[];
@@ -53,30 +54,36 @@ function CotizadorCol({ products, plans, settings, onFicha }: ColProps) {
 
     useEffect(() => {
         if (!product) return;
-        const updated = products.find(p => p.codigo === product.codigo);
+        const updated = products.find((p) => p.codigo === product.codigo);
         if (!updated) {
             setProduct(null);
             return;
         }
-        const changed =
+        if (
             updated.precio !== product.precio ||
             updated.stock !== product.stock ||
-            updated.nombre !== product.nombre;
-        if (changed) setProduct(updated);
+            updated.nombre !== product.nombre
+        ) {
+            setProduct(updated);
+        }
     }, [products, product]);
 
     const filtered = useMemo(() => {
         const q = search.toLowerCase().trim();
         if (!q) return products.slice(0, 100);
         return products
-            .filter(p => p.nombre.toLowerCase().includes(q) || p.codigo.toLowerCase().includes(q))
+            .filter(
+                (p) =>
+                    p.nombre.toLowerCase().includes(q) ||
+                    p.codigo.toLowerCase().includes(q)
+            )
             .slice(0, 100);
     }, [search, products]);
 
     const calc = useMemo(() => {
         const subtotal = (product?.precio || 0) * qty;
         const itemsText = product
-            ? (qty > 1 ? qty + "x " : "") + "[" + product.codigo + "] " + product.nombre
+            ? (qty > 1 ? `${qty}x ` : "") + `[${product.codigo}] ${product.nombre}`
             : "";
         return {
             subtotal,
@@ -97,119 +104,127 @@ function CotizadorCol({ products, plans, settings, onFicha }: ColProps) {
         if (product) alert(`Stock de "${product.nombre}": ${product.stock} unidades`);
     };
 
-    // ── styles ──
-    const inputSearch = "w-full bg-[#0d1117] border border-[#2a2f3e] rounded-lg px-3 py-2 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-gray-500";
-    const btnRed = "flex-1 bg-orange-600 hover:bg-orange-500 active:bg-orange-700 text-white font-extrabold py-2.5 rounded-lg text-sm tracking-wide transition-colors uppercase";
-    const btnGreen = "flex-1 bg-green-600 hover:bg-green-500 active:bg-green-700 text-white font-extrabold py-2.5 rounded-lg text-sm tracking-wide transition-colors uppercase";
-    const btnBlue = "flex-1 bg-[#25A1ED] hover:bg-blue-400 active:bg-blue-600 text-white font-extrabold py-2.5 rounded-lg text-sm tracking-wide transition-colors uppercase";
-
     return (
-        <div className="bg-[#1c2333] border border-[#2a2f3e] rounded-2xl p-4 flex flex-col gap-3">
-
-            {/* Búsqueda */}
+        <div className="bg-[#1a2638] border border-[#2d3b4f] rounded-2xl p-3.5 flex flex-col gap-2.5 shadow-[0_6px_20px_rgba(0,0,0,0.35)]">
             <input
                 type="text"
-                placeholder="Buscar por código o nombre..."
+                placeholder="Codigo"
                 value={search}
-                onChange={e => setSearch(e.target.value)}
-                className={inputSearch}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full bg-[#0d1522] border border-[#f0a12e] rounded-lg px-3 py-2 text-white text-base font-bold placeholder-gray-500 focus:outline-none"
             />
 
-            {/* Dropdown con código siempre visible */}
             <select
-                className="w-full bg-white text-gray-900 font-bold rounded-lg px-3 py-2 text-sm focus:outline-none cursor-pointer"
+                className="w-full bg-[#0f1a2a] border border-[#2d3b4f] text-white font-bold rounded-lg px-3 py-2.5 text-sm focus:outline-none cursor-pointer"
                 value={product?.codigo || ""}
-                onChange={e => {
-                    const p = products.find(prod => prod.codigo === e.target.value);
+                onChange={(e) => {
+                    const p = products.find((prod) => prod.codigo === e.target.value);
                     setProduct(p || null);
                 }}
             >
-                <option value="">Seleccione producto...</option>
-                {filtered.map(p => (
+                <option value="">Resultados...</option>
+                {filtered.map((p) => (
                     <option key={p.codigo} value={p.codigo}>
                         [{p.codigo}] {p.nombre}
                     </option>
                 ))}
             </select>
 
-            {/* LIMPIAR / STOCK */}
-            <div className="flex gap-2">
-                <button onClick={handleLimpiar} className={btnRed}>LIMPIAR</button>
-                <button onClick={handleStock} className={btnGreen}>STOCK</button>
+            <div className="grid grid-cols-2 gap-2">
+                <button
+                    onClick={handleLimpiar}
+                    className="bg-[#ef3d2f] hover:bg-[#dc3528] text-white font-black py-2 rounded-md text-[12px] tracking-wide uppercase"
+                >
+                    Limpiar
+                </button>
+                <button
+                    onClick={handleStock}
+                    className="bg-[#58d64a] hover:bg-[#4ec342] text-white font-black py-2 rounded-md text-[12px] tracking-wide uppercase"
+                >
+                    Stock
+                </button>
             </div>
 
-            {/* Cantidad */}
-            <div className="flex items-center gap-2 bg-[#0d1117] border border-[#2a2f3e] rounded-lg px-3 py-2">
-                <span className="text-gray-400 font-bold text-xs uppercase tracking-wide w-20">Cantidad:</span>
+            <div className="flex items-center gap-2 bg-[#0f1a2a] border border-[#2d3b4f] rounded-md px-2.5 py-1.5">
+                <span className="text-white/85 font-bold text-sm">Cantidad:</span>
                 <button
                     onClick={() => setQty(Math.max(1, qty - 1))}
-                    className="bg-orange-600 hover:bg-orange-500 w-8 h-8 rounded font-extrabold text-white flex items-center justify-center shrink-0"
-                >−</button>
+                    className="bg-[#ef3d2f] hover:bg-[#dc3528] w-7 h-7 rounded text-white font-black text-lg leading-none"
+                >
+                    -
+                </button>
                 <input
                     type="number"
                     value={qty}
-                    onChange={e => setQty(Math.max(1, parseInt(e.target.value) || 1))}
-                    className="flex-1 bg-transparent text-center font-extrabold text-white text-lg focus:outline-none"
+                    onChange={(e) => setQty(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="w-full bg-transparent text-center text-white text-lg font-extrabold focus:outline-none"
                 />
                 <button
                     onClick={() => setQty(qty + 1)}
-                    className="bg-green-600 hover:bg-green-500 w-8 h-8 rounded font-extrabold text-white flex items-center justify-center shrink-0"
-                >+</button>
+                    className="bg-[#58d64a] hover:bg-[#4ec342] w-7 h-7 rounded text-white font-black text-lg leading-none"
+                >
+                    +
+                </button>
             </div>
 
-            {/* Anticipo */}
             <input
                 type="number"
                 placeholder="Anticipo (Opcional)"
                 value={anticipo || ""}
-                onChange={e => setAnticipo(parseInt(e.target.value) || 0)}
-                className="w-full bg-yellow-50 text-gray-900 font-bold px-4 py-2.5 rounded-lg focus:outline-none border-2 border-transparent focus:border-yellow-400 placeholder-gray-500 text-sm"
+                onChange={(e) => setAnticipo(parseInt(e.target.value) || 0)}
+                className="w-full bg-[#f3e8c8] text-[#2b2b2b] font-bold px-3 py-2 rounded-md border border-[#e7d7ae] focus:outline-none text-sm"
             />
 
-            {/* FICHA / COPIAR */}
-            <div className="flex gap-2">
+            <div className="grid grid-cols-2 gap-2">
                 <button
                     onClick={() => onFicha(calc)}
-                    className={`${btnGreen} flex items-center justify-center gap-1.5`}
+                    className="bg-[#47d98a] hover:bg-[#3fc57c] text-white font-black py-2 rounded-md text-[12px] uppercase tracking-wide flex items-center justify-center gap-1.5"
                 >
-                    <ClipboardList className="w-4 h-4" /> FICHA
+                    <ClipboardList className="w-4 h-4" /> Ficha
                 </button>
                 <button
                     onClick={() => navigator.clipboard.writeText(generatePresupuestoText(calc))}
-                    className={`${btnBlue} flex items-center justify-center gap-1.5`}
+                    className="bg-[#29b4f0] hover:bg-[#239dd1] text-white font-black py-2 rounded-md text-[12px] uppercase tracking-wide flex items-center justify-center gap-1.5"
                 >
-                    <ClipboardList className="w-4 h-4" /> COPIAR
+                    <ClipboardList className="w-4 h-4" /> Copiar
                 </button>
             </div>
 
-            {/* Caja de producto */}
             {product ? (
-                <div className="bg-[#131929] border border-[#2a2f3e] rounded-xl p-4">
-                    <div className="text-gray-300 font-bold text-sm mb-2 leading-snug">
+                <div className="bg-[#0f1724] border border-[#f0a12e] rounded-lg px-3 py-2.5">
+                    <div className="text-white font-black text-[19px] leading-tight uppercase">
                         [{product.codigo}] {product.nombre}
                     </div>
-                    <div className="text-white font-extrabold text-2xl leading-tight">
+                    <div className="text-[#ffc64f] font-extrabold text-[40px] leading-none mt-1">
                         ${formatARS(calc.subtotal)}
                     </div>
-                    <div className="text-gray-500 text-xs mt-1">Stock: {product.stock}</div>
+                    <span
+                        className={`inline-block mt-1 text-[11px] px-2 py-[2px] rounded font-black ${
+                            Number(product.stock) > 0
+                                ? "bg-[#2b8f40] text-white"
+                                : "bg-[#b6372f] text-white"
+                        }`}
+                    >
+                        Stock: {product.stock}
+                    </span>
                 </div>
             ) : (
-                <div className="bg-[#131929] border border-[#2a2f3e] rounded-xl p-4 flex items-center justify-center min-h-[80px]">
-                    <span className="text-gray-600 text-sm">Sin producto seleccionado</span>
+                <div className="bg-[#101827] border border-[#2d3b4f] rounded-lg px-3 py-4 text-center text-white/45 font-semibold text-sm">
+                    Sin producto seleccionado
                 </div>
             )}
 
-            {/* Cards de planes */}
             {calc.subtotal > 0 && (
                 <div className="flex flex-col gap-2">
-                    {calc.planStats.map((p: any) => <PlanCard key={p.id} p={p} />)}
+                    {calc.planStats.map((p: any) => (
+                        <PlanCard key={p.id} p={p} />
+                    ))}
                 </div>
             )}
         </div>
     );
 }
 
-// ─── Página principal ─────────────────────────────────────────────────────────
 export default function CotizadorPage() {
     const [settings, setSettings] = useState<any>(null);
     const [plans, setPlans] = useState<any[]>([]);
@@ -220,44 +235,58 @@ export default function CotizadorPage() {
     const [showRegistration, setShowRegistration] = useState(false);
     const [activeCalc, setActiveCalc] = useState<any | null>(null);
 
-    useEffect(() => { fetchInitialData(); }, []);
-    useEffect(() => { if (settings) fetchProducts(selectedList); }, [selectedList, settings]);
+    useEffect(() => {
+        fetchInitialData();
+    }, []);
+
+    useEffect(() => {
+        if (settings) fetchProducts(selectedList);
+    }, [selectedList, settings]);
 
     async function fetchInitialData() {
         setLoading(true);
         const [resPlans, resSettings] = await Promise.all([
-            fetch("/api/plans").then(r => r.json()),
-            fetch("/api/settings").then(r => r.json()),
+            fetch("/api/plans").then((r) => r.json()),
+            fetch("/api/settings").then((r) => r.json()),
         ]);
-        if (resPlans.success) setPlans(resPlans.data.sort((a: any, b: any) => a.orden - b.orden).filter((p: any) => p.activo));
+        if (resPlans.success) {
+            setPlans(
+                resPlans.data
+                    .sort((a: any, b: any) => a.orden - b.orden)
+                    .filter((p: any) => p.activo)
+            );
+        }
         if (resSettings.success) {
             setSettings(resSettings.data);
-            if (resSettings.data.listas.length > 0) setSelectedList(resSettings.data.listas[0]);
+            if (resSettings.data.listas.length > 0) {
+                setSelectedList(resSettings.data.listas[0]);
+            }
         }
         setLoading(false);
     }
 
     async function fetchProducts(listName: string) {
         const listKey = (listName || "").trim().toLowerCase();
-        const res = await fetch(`/api/products?list=${encodeURIComponent(listKey)}&_t=${Date.now()}`, {
-            cache: "no-store",
-        });
+        const res = await fetch(
+            `/api/products?list=${encodeURIComponent(listKey)}&_t=${Date.now()}`,
+            { cache: "no-store" }
+        );
         const json = await res.json();
         if (json.success) setProducts(json.data);
     }
 
-    if (loading) return <div className="p-8 text-neutral-500 text-sm">Cargando cotizador...</div>;
+    if (loading) {
+        return <div className="p-8 text-neutral-500 text-sm">Cargando cotizador...</div>;
+    }
 
     return (
-        <div className="w-full max-w-7xl px-4 py-4 md:px-8 flex flex-col items-center gap-6">
-
-            {/* Selector de lista */}
-            <div className="flex flex-col items-center gap-2">
-                <div className="flex items-center gap-2 bg-[#1c2333] p-2 rounded-xl border border-[#2a2f3e]">
+        <div className="w-full max-w-[1500px] px-3 md:px-6 py-3 flex flex-col items-center gap-4">
+            <div className="w-full max-w-[450px] bg-[#1a2638] border border-[#2d3b4f] rounded-xl p-2.5 shadow-[0_5px_16px_rgba(0,0,0,0.35)]">
+                <div className="flex items-center gap-2">
                     <select
                         value={selectedList}
-                        onChange={e => setSelectedList(e.target.value)}
-                        className="bg-white text-gray-900 font-bold px-4 py-2 rounded-lg focus:outline-none min-w-[240px] text-sm"
+                        onChange={(e) => setSelectedList(e.target.value)}
+                        className="flex-1 bg-[#f5f7fb] text-[#223049] font-black px-4 py-2 rounded-lg focus:outline-none text-sm"
                     >
                         {settings?.listas.map((lst: string) => (
                             <option key={lst} value={lst}>
@@ -267,22 +296,45 @@ export default function CotizadorPage() {
                     </select>
                     <button
                         onClick={() => fetchProducts(selectedList)}
-                        className="bg-blue-700 hover:bg-blue-600 text-white p-2 rounded-lg transition-colors"
+                        className="bg-[#2c8ffd] hover:bg-[#277fdd] text-white p-2 rounded-lg transition-colors"
                         title="Actualizar productos"
                     >
                         <RotateCcw className="w-4 h-4" />
                     </button>
                 </div>
-                <div className="text-green-400 font-bold text-xs flex items-center gap-1">
-                    <Check className="w-3.5 h-3.5" /> {products.length} productos cargados
+                <div className="text-[#6de67f] font-black text-xs flex items-center justify-center gap-1 mt-1.5">
+                    <Check className="w-3.5 h-3.5" /> {products.length} productos
                 </div>
             </div>
 
-            {/* 3 columnas idénticas */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 w-full">
-                <CotizadorCol products={products} plans={plans} settings={settings} onFicha={(calc) => { setActiveCalc(calc); setShowRegistration(true); }} />
-                <CotizadorCol products={products} plans={plans} settings={settings} onFicha={(calc) => { setActiveCalc(calc); setShowRegistration(true); }} />
-                <CotizadorCol products={products} plans={plans} settings={settings} onFicha={(calc) => { setActiveCalc(calc); setShowRegistration(true); }} />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 w-full">
+                <CotizadorCol
+                    products={products}
+                    plans={plans}
+                    settings={settings}
+                    onFicha={(calc) => {
+                        setActiveCalc(calc);
+                        setShowRegistration(true);
+                    }}
+                />
+                <CotizadorCol
+                    products={products}
+                    plans={plans}
+                    settings={settings}
+                    onFicha={(calc) => {
+                        setActiveCalc(calc);
+                        setShowRegistration(true);
+                    }}
+                />
+                <CotizadorCol
+                    products={products}
+                    plans={plans}
+                    settings={settings}
+                    onFicha={(calc) => {
+                        setActiveCalc(calc);
+                        setShowRegistration(true);
+                    }}
+                />
             </div>
 
             {showRegistration && activeCalc && (
