@@ -28,7 +28,7 @@ function PlanCard({
     return (
         <div className={`rounded-lg border overflow-hidden relative ${cardClass}`}>
             {!isContado && p.badge && (
-                <span className="absolute top-1.5 right-1.5 bg-[#f04a40] text-white text-[9px] px-2 py-[1px] rounded-full uppercase font-black tracking-wide">
+                <span className="absolute top-1.5 right-1.5 z-10 bg-gradient-to-b from-[#ff6351] to-[#d7382b] border border-[#ff9f86]/70 text-white text-[10px] sm:text-[11px] px-3 py-1 rounded-full uppercase font-black tracking-[0.08em] whitespace-nowrap leading-none shadow-[0_2px_0_#8f1f15,0_5px_10px_rgba(0,0,0,0.35)]">
                     {p.badge}
                 </span>
             )}
