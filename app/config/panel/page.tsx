@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { Fragment, useState, useEffect, useRef, useMemo } from "react";
 import {
     Settings, RefreshCw, Upload, Lock, FileText,
     CheckCircle, AlertTriangle, Database, CreditCard,
@@ -13,6 +13,23 @@ type ToastType = "success" | "error" | "info";
 interface Toast {
     type: ToastType;
     message: string;
+}
+
+interface LatestClientEntry {
+    nombre: string;
+    dni: string;
+    fecha: string;
+    zona: string;
+    telefono: string;
+    localidad: string;
+    hasDuplicateDni: boolean;
+    hasTitularConyugueMatch: boolean;
+}
+
+interface ClientsInsightsData {
+    latest10: LatestClientEntry[];
+    duplicateDnis: string[];
+    titularConyugueDnis: string[];
 }
 
 const PLANS_SYNC_CHANNEL = "plans-updates";
@@ -45,7 +62,10 @@ export default function AdminPanel() {
     const [clientsSearch, setClientsSearch] = useState("");
     const [clientsPage, setClientsPage] = useState(0);
     const [loadingClients, setLoadingClients] = useState(false);
-    const [expandedClientNombre, setExpandedClientNombre] = useState<string | null>(null);
+    const [expandedClientKey, setExpandedClientKey] = useState<string | null>(null);
+    const [clientsInsights, setClientsInsights] = useState<ClientsInsightsData | null>(null);
+    const [clientObsDrafts, setClientObsDrafts] = useState<Record<string, string>>({});
+    const [savingObsKey, setSavingObsKey] = useState<string | null>(null);
 
     // Catálogo - borrar
     const [clearingCatalog, setClearingCatalog] = useState(false);
@@ -70,6 +90,14 @@ export default function AdminPanel() {
     const showToast = (type: ToastType, message: string) => {
         setToast({ type, message });
         setTimeout(() => setToast(null), 4000);
+    };
+
+    const normalizeDni = (val: string): string => String(val || "").replace(/\D/g, "");
+    const getClientKey = (c: any): string => {
+        const nombre = String(c.nombre || "").trim().toUpperCase();
+        const dni = normalizeDni(String(c.dni || ""));
+        const nroCliente = String(c.nroCliente || "").trim().toUpperCase();
+        return `${nombre}::${dni || nroCliente}`;
     };
 
     const broadcastPlansUpdated = () => {
@@ -125,14 +153,61 @@ export default function AdminPanel() {
     const fetchClientsPreview = async () => {
         setLoadingClients(true);
         try {
-            const res = await fetch("/api/clients");
-            const json = await res.json();
-            if (json.success) {
-                setAllClients(json.data);
+            const [clientsRes, insightsRes] = await Promise.all([
+                fetch("/api/clients"),
+                fetch("/api/clients/insights"),
+            ]);
+            const clientsJson = await clientsRes.json();
+            const insightsJson = await insightsRes.json();
+
+            if (clientsJson.success) {
+                const loadedClients = Array.isArray(clientsJson.data) ? clientsJson.data : [];
+                const drafts: Record<string, string> = {};
+                loadedClients.forEach((client: any) => {
+                    drafts[getClientKey(client)] = String(client.observaciones ?? "");
+                });
+                setAllClients(loadedClients);
+                setClientObsDrafts(drafts);
                 setClientsPage(0);
+                setExpandedClientKey(null);
+            }
+            if (insightsJson.success) {
+                setClientsInsights(insightsJson.data);
             }
         } catch { } finally {
             setLoadingClients(false);
+        }
+    };
+
+    const handleSaveClientObservaciones = async (client: any) => {
+        const key = getClientKey(client);
+        const observaciones = String(clientObsDrafts[key] ?? "").trim();
+        setSavingObsKey(key);
+        try {
+            const res = await fetch("/api/clients", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    nombre: client.nombre,
+                    dni: client.dni,
+                    observaciones,
+                }),
+            });
+            const json = await res.json();
+            if (!res.ok || !json.success) {
+                showToast("error", json.error || "No se pudo guardar observaciones");
+                return;
+            }
+
+            setAllClients(prev => prev.map(c => (
+                getClientKey(c) === key ? { ...c, observaciones } : c
+            )));
+            setClientObsDrafts(prev => ({ ...prev, [key]: observaciones }));
+            showToast("success", "Observaciones actualizadas");
+        } catch {
+            showToast("error", "Error de conexión al guardar observaciones");
+        } finally {
+            setSavingObsKey(null);
         }
     };
 
@@ -305,9 +380,20 @@ export default function AdminPanel() {
             c.telefono?.toLowerCase().includes(q) ||
             c.localidad?.toLowerCase().includes(q) ||
             c.zona?.toLowerCase().includes(q) ||
-            c.rubro?.toLowerCase().includes(q)
+            c.rubro?.toLowerCase().includes(q) ||
+            c.observaciones?.toLowerCase().includes(q)
         );
     }, [allClients, clientsSearch]);
+
+    const duplicateDniSet = useMemo(
+        () => new Set((clientsInsights?.duplicateDnis ?? []).map(dni => String(dni || "").replace(/\D/g, "")).filter(Boolean)),
+        [clientsInsights]
+    );
+
+    const titularConyugueSet = useMemo(
+        () => new Set((clientsInsights?.titularConyugueDnis ?? []).map(dni => String(dni || "").replace(/\D/g, "")).filter(Boolean)),
+        [clientsInsights]
+    );
 
     const totalClientPages = Math.ceil(filteredClients.length / CLIENTS_PER_PAGE);
     const paginatedClients = filteredClients.slice(clientsPage * CLIENTS_PER_PAGE, (clientsPage + 1) * CLIENTS_PER_PAGE);
@@ -841,7 +927,7 @@ export default function AdminPanel() {
                                                                             ["Fecha", formatDate(reg.fecha)],
                                                                             ["Vendedor", reg.vendedor],
                                                                             ["Cliente", reg.cliente],
-                                                                            ["N° Cliente", reg.nroCliente],
+                                                                            ["Nro Cliente", reg.nroCliente],
                                                                             ["DNI", reg.dni],
                                                                             ["Teléfono", reg.telefono],
                                                                             ["Localidad", reg.localidad],
@@ -952,6 +1038,55 @@ export default function AdminPanel() {
                                 )}
                             </div>
 
+                            {/* Ultimos 10 */}
+                            {clientsInsights?.latest10?.length ? (
+                                <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-5">
+                                    <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                                        <h3 className="font-semibold text-white">Ultimos 10 clientes agregados</h3>
+                                        <span className="text-xs text-neutral-500">Click para filtrar por DNI</span>
+                                    </div>
+                                    <div className="space-y-2">
+                                        {clientsInsights.latest10.map((entry, idx) => {
+                                            const dniNorm = normalizeDni(entry.dni);
+                                            const isDuplicate = Boolean(entry.hasDuplicateDni || (dniNorm && duplicateDniSet.has(dniNorm)));
+                                            const hasTitularConyugue = Boolean(entry.hasTitularConyugueMatch || (dniNorm && titularConyugueSet.has(dniNorm)));
+                                            const hasAlert = isDuplicate || hasTitularConyugue;
+                                            return (
+                                                <button
+                                                    key={`${entry.nombre}-${entry.fecha}-${idx}`}
+                                                    onClick={() => {
+                                                        setClientsSearch(dniNorm || entry.nombre);
+                                                        setClientsPage(0);
+                                                    }}
+                                                    className={`w-full text-left border rounded-xl px-3 py-2 transition-colors ${hasAlert
+                                                        ? "bg-amber-500/10 border-amber-400/40 hover:bg-amber-500/15"
+                                                        : "bg-neutral-800/60 border-neutral-700 hover:bg-neutral-800"
+                                                        }`}
+                                                >
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <span className="text-white text-sm font-semibold">{entry.nombre || "Sin nombre"}</span>
+                                                        {isDuplicate && (
+                                                            <span className="text-[10px] uppercase tracking-wide font-bold px-2 py-0.5 rounded-full bg-amber-300/20 text-amber-200 border border-amber-300/30">
+                                                                Repetido
+                                                            </span>
+                                                        )}
+                                                        {hasTitularConyugue && (
+                                                            <span className="text-[10px] uppercase tracking-wide font-bold px-2 py-0.5 rounded-full bg-yellow-300/20 text-yellow-200 border border-yellow-300/40">
+                                                                Titular/Conyuge
+                                                            </span>
+                                                        )}
+                                                        <span className="text-xs text-neutral-500 ml-auto">{formatDate(entry.fecha)}</span>
+                                                    </div>
+                                                    <p className="text-xs text-neutral-400 mt-1">
+                                                        DNI: <span className="text-neutral-200">{entry.dni || "-"}</span> - Localidad: {entry.localidad || "-"} - Zona: {entry.zona || "-"}
+                                                    </p>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            ) : null}
+
                             {/* Lista completa */}
                             <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-5">
                                 <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
@@ -973,6 +1108,17 @@ export default function AdminPanel() {
                                     </button>
                                 </div>
 
+                                {clientsInsights && (
+                                    <div className="mb-4 flex flex-wrap gap-2">
+                                        <span className="text-xs px-2 py-1 rounded-lg bg-amber-500/15 text-amber-200 border border-amber-400/30">
+                                            DNI repetidos: {clientsInsights.duplicateDnis.length}
+                                        </span>
+                                        <span className="text-xs px-2 py-1 rounded-lg bg-yellow-500/15 text-yellow-200 border border-yellow-400/30">
+                                            Titular/Conyuge: {clientsInsights.titularConyugueDnis.length}
+                                        </span>
+                                    </div>
+                                )}
+
                                 {loadingClients ? (
                                     <div className="flex items-center gap-2 text-neutral-500 text-sm py-4">
                                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -987,21 +1133,22 @@ export default function AdminPanel() {
                                                 type="text"
                                                 value={clientsSearch}
                                                 onChange={(e) => { setClientsSearch(e.target.value); setClientsPage(0); }}
-                                                placeholder="Buscar por nombre, DNI, localidad o zona..."
+                                                placeholder="Buscar por nombre, DNI, localidad, zona u observaciones..."
                                                 className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500 placeholder:text-neutral-500"
                                             />
                                         </div>
 
                                         {paginatedClients.length === 0 ? (
-                                            <p className="text-neutral-500 text-sm py-4 text-center">Sin resultados para esa búsqueda.</p>
+                                            <p className="text-neutral-500 text-sm py-4 text-center">Sin resultados para esa busqueda.</p>
                                         ) : (
                                             <div className="overflow-x-auto rounded-xl border border-neutral-800">
                                                 <table className="w-full text-sm">
                                                     <thead>
                                                         <tr className="bg-neutral-800/60 border-b border-neutral-700">
                                                             <th className="text-left px-4 py-2.5 text-neutral-400 font-semibold text-xs uppercase tracking-wide">Nombre</th>
-                                                            <th className="text-left px-4 py-2.5 text-neutral-400 font-semibold text-xs uppercase tracking-wide">N° Cliente</th>
-                                                            <th className="text-left px-4 py-2.5 text-neutral-400 font-semibold text-xs uppercase tracking-wide">Teléfono</th>
+                                                            <th className="text-left px-4 py-2.5 text-neutral-400 font-semibold text-xs uppercase tracking-wide">Nro Cliente</th>
+                                                            <th className="text-left px-4 py-2.5 text-neutral-400 font-semibold text-xs uppercase tracking-wide">DNI</th>
+                                                            <th className="text-left px-4 py-2.5 text-neutral-400 font-semibold text-xs uppercase tracking-wide">Telefono</th>
                                                             <th className="text-left px-4 py-2.5 text-neutral-400 font-semibold text-xs uppercase tracking-wide">Localidad</th>
                                                             <th className="text-left px-4 py-2.5 text-neutral-400 font-semibold text-xs uppercase tracking-wide">Zona</th>
                                                             <th className="text-left px-4 py-2.5 text-neutral-400 font-semibold text-xs uppercase tracking-wide">Rubro</th>
@@ -1010,52 +1157,107 @@ export default function AdminPanel() {
                                                     </thead>
                                                     <tbody>
                                                         {paginatedClients.map((c, i) => {
-                                                            const isExpanded = expandedClientNombre === c.nombre;
+                                                            const key = getClientKey(c);
+                                                            const isExpanded = expandedClientKey === key;
+                                                            const dniNorm = normalizeDni(String(c.dni || ""));
+                                                            const isDuplicate = Boolean(dniNorm && duplicateDniSet.has(dniNorm));
+                                                            const hasTitularConyugue = Boolean(dniNorm && titularConyugueSet.has(dniNorm));
+                                                            const hasAlert = isDuplicate || hasTitularConyugue;
+                                                            const obsValue = String(clientObsDrafts[key] ?? c.observaciones ?? "");
+
                                                             return (
-                                                                <>
+                                                                <Fragment key={`${key}-${i}`}>
                                                                     <tr
-                                                                        key={`${i}-row`}
-                                                                        onClick={() => setExpandedClientNombre(isExpanded ? null : c.nombre)}
-                                                                        className={`border-b border-neutral-800/60 cursor-pointer transition-colors ${isExpanded ? "bg-indigo-500/5 border-indigo-500/20" : "hover:bg-neutral-800/40"}`}
+                                                                        onClick={() => setExpandedClientKey(isExpanded ? null : key)}
+                                                                        className={`border-b cursor-pointer transition-colors ${hasAlert
+                                                                            ? "bg-amber-500/8 border-amber-500/20 hover:bg-amber-500/15"
+                                                                            : "border-neutral-800/60 hover:bg-neutral-800/40"
+                                                                            } ${isExpanded ? "bg-indigo-500/5 border-indigo-500/20" : ""}`}
                                                                     >
-                                                                        <td className="px-4 py-3 text-white font-semibold whitespace-nowrap">{c.nombre}</td>
-                                                                        <td className="px-4 py-3 text-indigo-300 text-xs font-mono">{c.nroCliente || "—"}</td>
-                                                                        <td className="px-4 py-3 text-neutral-300">{c.telefono || "—"}</td>
-                                                                        <td className="px-4 py-3 text-neutral-300">{c.localidad || "—"}</td>
-                                                                        <td className="px-4 py-3 text-neutral-400">{c.zona || "—"}</td>
-                                                                        <td className="px-4 py-3 text-neutral-400">{c.rubro || "—"}</td>
+                                                                        <td className="px-4 py-3">
+                                                                            <div className="flex flex-wrap items-center gap-2">
+                                                                                <span className="text-white font-semibold whitespace-nowrap">{c.nombre || "-"}</span>
+                                                                                {isDuplicate && (
+                                                                                    <span className="text-[10px] uppercase tracking-wide font-bold px-2 py-0.5 rounded-full bg-amber-300/20 text-amber-200 border border-amber-300/30">
+                                                                                        Repetido
+                                                                                    </span>
+                                                                                )}
+                                                                                {hasTitularConyugue && (
+                                                                                    <span className="text-[10px] uppercase tracking-wide font-bold px-2 py-0.5 rounded-full bg-yellow-300/20 text-yellow-200 border border-yellow-300/40">
+                                                                                        Titular/Conyuge
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
+                                                                        </td>
+                                                                        <td className="px-4 py-3 text-indigo-300 text-xs font-mono">{c.nroCliente || "-"}</td>
+                                                                        <td className="px-4 py-3 text-neutral-300 text-xs font-mono">{c.dni || "-"}</td>
+                                                                        <td className="px-4 py-3 text-neutral-300">{c.telefono || "-"}</td>
+                                                                        <td className="px-4 py-3 text-neutral-300">{c.localidad || "-"}</td>
+                                                                        <td className="px-4 py-3 text-neutral-400">{c.zona || "-"}</td>
+                                                                        <td className="px-4 py-3 text-neutral-400">{c.rubro || "-"}</td>
                                                                         <td className="px-4 py-3">
                                                                             <ChevronRight className={`w-4 h-4 text-neutral-500 transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`} />
                                                                         </td>
                                                                     </tr>
                                                                     {isExpanded && (
-                                                                        <tr key={`${i}-expanded`} className="bg-neutral-900/60 border-b border-neutral-800">
-                                                                            <td colSpan={7} className="px-4 py-4">
+                                                                        <tr className="bg-neutral-900/70 border-b border-neutral-800">
+                                                                            <td colSpan={8} className="px-4 py-4">
                                                                                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                                                                                     {[
                                                                                         ["Nombre", c.nombre],
-                                                                                        ["N° Cliente", c.nroCliente],
+                                                                                        ["Nro Cliente", c.nroCliente],
                                                                                         ["DNI", c.dni],
-                                                                                        ["Teléfono", c.telefono],
+                                                                                        ["Telefono", c.telefono],
                                                                                         ["Localidad", c.localidad],
                                                                                         ["Zona", c.zona],
                                                                                         ["Rubro", c.rubro],
                                                                                         ["Dom. Comercial", c.domCom],
                                                                                         ["Dom. Particular", c.domPar],
-                                                                                        ["Cónyuge", c.conyugue],
-                                                                                        ["DNI Cónyuge", c.dniConyugue],
-                                                                                        ["Tel. Cónyuge", c.telConyugue],
+                                                                                        ["Conyuge", c.conyugue],
+                                                                                        ["DNI Conyuge", c.dniConyugue],
+                                                                                        ["Tel. Conyuge", c.telConyugue],
                                                                                     ].map(([label, value]) => (
                                                                                         <div key={label} className="bg-neutral-800 rounded-lg px-3 py-2 border border-neutral-700/60">
                                                                                             <p className="text-neutral-500 text-[10px] uppercase tracking-wide mb-0.5">{label}</p>
-                                                                                            <p className="text-neutral-200 text-xs font-medium break-words">{value || "—"}</p>
+                                                                                            <p className="text-neutral-200 text-xs font-medium break-words">{value || "-"}</p>
                                                                                         </div>
                                                                                     ))}
+                                                                                </div>
+
+                                                                                <div className="mt-4 pt-4 border-t border-neutral-800">
+                                                                                    <label className="text-xs text-neutral-400 block mb-1.5">Observaciones internas (admin)</label>
+                                                                                    <textarea
+                                                                                        value={obsValue}
+                                                                                        onChange={(e) => setClientObsDrafts(prev => ({ ...prev, [key]: e.target.value }))}
+                                                                                        rows={3}
+                                                                                        placeholder="Ej: firma afectada, validacion pendiente, motivo de rechazo..."
+                                                                                        className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2 text-sm text-white placeholder:text-neutral-500 focus:outline-none focus:border-indigo-500"
+                                                                                    />
+                                                                                    <div className="mt-2 flex justify-end">
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={() => handleSaveClientObservaciones(c)}
+                                                                                            disabled={savingObsKey === key}
+                                                                                            className="inline-flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white transition-colors"
+                                                                                        >
+                                                                                            {savingObsKey === key ? (
+                                                                                                <>
+                                                                                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                                                                                    Guardando...
+                                                                                                </>
+                                                                                            ) : (
+                                                                                                <>
+                                                                                                    <CheckCircle className="w-3 h-3" />
+                                                                                                    Guardar observaciones
+                                                                                                </>
+                                                                                            )}
+                                                                                        </button>
+                                                                                    </div>
                                                                                 </div>
                                                                             </td>
                                                                         </tr>
                                                                     )}
-                                                                </>
+                                                                </Fragment>
                                                             );
                                                         })}
                                                     </tbody>
@@ -1066,7 +1268,7 @@ export default function AdminPanel() {
                                         {totalClientPages > 1 && (
                                             <div className="flex flex-wrap items-center justify-between gap-3 mt-4 pt-4 border-t border-neutral-800">
                                                 <p className="text-xs text-neutral-500">
-                                                    Página {clientsPage + 1} de {totalClientPages} · {filteredClients.length} clientes
+                                                    Pagina {clientsPage + 1} de {totalClientPages} - {filteredClients.length} clientes
                                                 </p>
                                                 <div className="flex gap-2">
                                                     <button
@@ -1074,14 +1276,14 @@ export default function AdminPanel() {
                                                         disabled={clientsPage === 0}
                                                         className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 disabled:opacity-30 text-white text-xs rounded-lg transition-colors"
                                                     >
-                                                        ← Anterior
+                                                        Anterior
                                                     </button>
                                                     <button
                                                         onClick={() => setClientsPage(p => Math.min(totalClientPages - 1, p + 1))}
                                                         disabled={clientsPage >= totalClientPages - 1}
                                                         className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 disabled:opacity-30 text-white text-xs rounded-lg transition-colors"
                                                     >
-                                                        Siguiente →
+                                                        Siguiente
                                                     </button>
                                                 </div>
                                             </div>

@@ -66,4 +66,5 @@ export interface ClientRecord {
     telConyugue: string;
     zona: string;
     nroCliente: string;
+    observaciones?: string;
 }
