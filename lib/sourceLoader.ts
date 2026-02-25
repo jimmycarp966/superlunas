@@ -1,4 +1,5 @@
 import { Product, CatalogCache } from "./types";
+import { supabase } from "./supabase";
 import * as xlsx from "xlsx";
 import fs from "fs/promises";
 import path from "path";
@@ -6,10 +7,8 @@ import path from "path";
 // @ts-ignore
 const PDFParser = require("pdf2json");
 
-// Variables globales para cache en node
 const CACHE_TTL = parseInt(process.env.CACHE_TTL_SECONDS || "600") * 1000;
 
-// Declaramos explicitamente de modo que resista al hot-reload en dev
 declare global {
     var catalogCache: CatalogCache | undefined;
 }
@@ -24,7 +23,7 @@ const parseExcelBuffer = (buffer: Buffer): Product[] => {
         codigo: String(row.codigo || row.Codigo || "").trim(),
         nombre: String(row.nombre || row.Nombre || row.descripcion || "").trim(),
         precio: normalizePrice(String(row.precio || row.Precio || "0")),
-        stock: Number(row.stock || row.Stock || 100), // Default 100 si no hay
+        stock: Number(row.stock || row.Stock || 100),
         lista: String(row.lista || row.Lista || "local").trim().toLowerCase(),
     })).filter(p => p.codigo !== "");
 };
@@ -38,13 +37,11 @@ const parsePdfBuffer = async (buffer: Buffer): Promise<Product[]> => {
         pdfParser.on("pdfParser_dataReady", (pdfData: any) => {
             const products: Product[] = [];
 
-            // Posiciones X de cada columna detectadas desde la cabecera
             let headerCols: { codigo: number; nombre: number; precio: number; stock: number | null } | null = null;
 
             for (const page of pdfData.Pages || []) {
                 const texts = page.Texts || [];
 
-                // Agrupar elementos por línea (coordenada Y redondeada a 1 decimal)
                 const linesMap = new Map<number, { x: number; text: string }[]>();
 
                 for (const t of texts) {
@@ -61,7 +58,6 @@ const parsePdfBuffer = async (buffer: Buffer): Promise<Product[]> => {
                     const items = linesMap.get(y)!.sort((a, b) => a.x - b.x);
                     if (items.length < 2) continue;
 
-                    // Intentar detectar fila de cabecera (solo una vez)
                     if (!headerCols) {
                         const lowered = items.map(i => i.text.toLowerCase());
                         const hasCodigo = lowered.some(t => t.includes("cod"));
@@ -95,7 +91,6 @@ const parsePdfBuffer = async (buffer: Buffer): Promise<Product[]> => {
                     if (items.length < 3) continue;
 
                     if (headerCols) {
-                        // Asignar cada elemento al header más cercano por distancia X
                         const codigoItems: string[] = [];
                         const nombreItems: string[] = [];
                         const precioItems: string[] = [];
@@ -133,14 +128,11 @@ const parsePdfBuffer = async (buffer: Buffer): Promise<Product[]> => {
                             });
                         }
                     } else {
-                        // Heurística de fallback sin header detectado
                         const codigo = items[0].text;
 
-                        // Saltar cabeceras y totales
                         const codigoL = codigo.toLowerCase();
                         if (codigoL.includes("cod") || codigoL.includes("lista") || codigoL.includes("total")) continue;
 
-                        // Precio: número más a la derecha (de atrás hacia adelante)
                         let rawPrecio = "0";
                         let precioIdx = -1;
                         for (let i = items.length - 1; i >= 2; i--) {
@@ -152,7 +144,6 @@ const parsePdfBuffer = async (buffer: Buffer): Promise<Product[]> => {
                             }
                         }
 
-                        // Stock: entero pequeño a la derecha del precio
                         let stock = 100;
                         for (let i = precioIdx + 1; i < items.length; i++) {
                             const n = parseInt(items[i].text);
@@ -162,7 +153,6 @@ const parsePdfBuffer = async (buffer: Buffer): Promise<Product[]> => {
                             }
                         }
 
-                        // Nombre: unir todos los elementos entre codigo (idx 0) y precio
                         const endNombre = precioIdx > 0 ? precioIdx : items.length - 1;
                         const nombre = items.slice(1, endNombre).map(i => i.text).join(" ").trim();
 
@@ -187,21 +177,59 @@ const parsePdfBuffer = async (buffer: Buffer): Promise<Product[]> => {
 };
 
 const normalizePrice = (rawVal: string): number => {
-    // Limpia el precio $ 1.234,56 -> 1234.56
-    // o $ 1,234.56 -> 1234.56
     let clean = rawVal.replace(/[^\d.,]/g, "");
 
-    // Heuristica: si hay una coma y esta al final (-3), es separador decimal
     if (clean.length > 3 && clean[clean.length - 3] === ',') {
         clean = clean.replace(/\./g, "").replace(",", ".");
     } else if (clean.length > 3 && clean[clean.length - 3] === '.') {
-        clean = clean.replace(/,/g, ""); // formato americano, quita las comas miles
+        clean = clean.replace(/,/g, "");
     } else {
-        // quita puntos y comas de todo
         clean = clean.replace(/[.,]/g, "");
     }
 
     return parseFloat(clean) || 0;
+};
+
+const loadProductsFromSupabase = async (): Promise<Product[] | null> => {
+    try {
+        const { data, error } = await supabase
+            .from("products")
+            .select("*");
+
+        if (error || !data || data.length === 0) return null;
+
+        return (data as Record<string, unknown>[]).map(row => ({
+            codigo: String(row.codigo),
+            nombre: String(row.nombre),
+            precio: Number(row.precio),
+            stock: Number(row.stock),
+            lista: String(row.lista),
+        }));
+    } catch {
+        return null;
+    }
+};
+
+const saveProductsToSupabase = async (products: Product[]): Promise<void> => {
+    try {
+        await supabase.from("products").delete().neq("codigo", "");
+        if (products.length > 0) {
+            const rows = products.map(p => ({
+                codigo: p.codigo,
+                nombre: p.nombre,
+                precio: p.precio,
+                stock: p.stock,
+                lista: p.lista,
+            }));
+            // Insertar en lotes de 500 para evitar límites
+            const BATCH = 500;
+            for (let i = 0; i < rows.length; i += BATCH) {
+                await supabase.from("products").insert(rows.slice(i, i + BATCH));
+            }
+        }
+    } catch (err) {
+        console.error("Error guardando productos en Supabase:", err);
+    }
 };
 
 export const fetchSourceFile = async (forceRefresh = false): Promise<Product[]> => {
@@ -213,14 +241,26 @@ export const fetchSourceFile = async (forceRefresh = false): Promise<Product[]> 
         }
     }
 
+    // Cold start: intentar cargar desde Supabase sin re-parsear el archivo
+    if (!forceRefresh) {
+        const fromDb = await loadProductsFromSupabase();
+        if (fromDb && fromDb.length > 0) {
+            global.catalogCache = {
+                data: fromDb,
+                updatedAt: now,
+                sourceVersion: `db-${now}-${fromDb.length}`,
+            };
+            return fromDb;
+        }
+    }
+
     try {
         const defaultLocalUrl = path.join(process.cwd(), "..", "LISTA DE PRECIO LOCAL TACO RALO CATAMARCA.pdf");
         const sourceUrl = process.env.SOURCE_FILE_URL || defaultLocalUrl;
         let fileBuffer: Buffer;
-        let isPdf = process.env.SOURCE_FILE_TYPE === 'pdf' || defaultLocalUrl.toLowerCase().endsWith('.pdf');
+        const isPdf = process.env.SOURCE_FILE_TYPE === 'pdf' || defaultLocalUrl.toLowerCase().endsWith('.pdf');
 
         if (sourceUrl.startsWith('http')) {
-            // Fetch externo
             const opts: RequestInit = {};
             if (process.env.SOURCE_AUTH_TOKEN) {
                 opts.headers = { Authorization: `Bearer ${process.env.SOURCE_AUTH_TOKEN}` };
@@ -229,7 +269,6 @@ export const fetchSourceFile = async (forceRefresh = false): Promise<Product[]> 
             if (!response.ok) throw new Error("Fallo descarga remota");
             fileBuffer = Buffer.from(await response.arrayBuffer());
         } else {
-            // Fetch local fallback
             fileBuffer = await fs.readFile(sourceUrl);
         }
 
@@ -240,15 +279,16 @@ export const fetchSourceFile = async (forceRefresh = false): Promise<Product[]> 
             rawProducts = parseExcelBuffer(fileBuffer);
         }
 
-        // Deduplicate array by codigo+lista
         const deduplicated = Array.from(new Map(
             rawProducts.map(p => [`${p.codigo}-${p.lista}`, p])
         ).values());
 
+        await saveProductsToSupabase(deduplicated);
+
         global.catalogCache = {
             data: deduplicated,
             updatedAt: now,
-            sourceVersion: `${now}-${deduplicated.length}`, // Simulamos un hash rapido
+            sourceVersion: `${now}-${deduplicated.length}`,
         };
 
         return deduplicated;
@@ -256,7 +296,7 @@ export const fetchSourceFile = async (forceRefresh = false): Promise<Product[]> 
         console.error("Error cargando fuente:", error);
         if (global.catalogCache) {
             console.warn("Retornando catalogo anterior estandar");
-            return global.catalogCache.data; // Fallback
+            return global.catalogCache.data;
         }
         throw error;
     }
@@ -266,7 +306,6 @@ export const getCurrentCatalog = async (opts?: { forceRefresh?: boolean }): Prom
     return await fetchSourceFile(opts?.forceRefresh);
 };
 
-// Carga directamente desde un buffer en memoria (para uploads sin escritura en disco)
 export const loadFromBuffer = async (buffer: Buffer, type: "pdf" | "excel"): Promise<number> => {
     const now = Date.now();
     let products: Product[];
@@ -280,6 +319,8 @@ export const loadFromBuffer = async (buffer: Buffer, type: "pdf" | "excel"): Pro
     const deduplicated = Array.from(new Map(
         products.map(p => [`${p.codigo}-${p.lista}`, p])
     ).values());
+
+    await saveProductsToSupabase(deduplicated);
 
     global.catalogCache = {
         data: deduplicated,

@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
     try {
-        const plans = getPlans();
+        const plans = await getPlans();
         return NextResponse.json({ success: true, data: plans });
     } catch (e: any) {
         return NextResponse.json({ error: e.message }, { status: 500 });
@@ -26,7 +26,7 @@ export async function PUT(request: NextRequest) {
             return NextResponse.json({ error: "Invalid body format, expected array" }, { status: 400 });
         }
 
-        const newPlans = updatePlans(body);
+        const newPlans = await updatePlans(body);
 
         return NextResponse.json({ success: true, data: newPlans });
     } catch (e: any) {

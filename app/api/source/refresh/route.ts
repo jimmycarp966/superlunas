@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentCatalog } from "@/lib/sourceLoader";
 import { verifyAuth } from "@/lib/auth";
+import { supabase } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,21 @@ export async function POST(request: NextRequest) {
             { success: false, error: error.message },
             { status: 500 }
         );
+    }
+}
+
+export async function DELETE(request: NextRequest) {
+    try {
+        const token = request.cookies.get("lunas_confort_session")?.value;
+        if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        const auth = await verifyAuth(token);
+        if (auth.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+        global.catalogCache = undefined;
+        await supabase.from("products").delete().neq("codigo", "");
+        return NextResponse.json({ success: true });
+    } catch (error: any) {
+        return NextResponse.json({ success: false, error: error.message }, { status: 500 });
     }
 }
 

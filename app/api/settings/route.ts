@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
     try {
-        const settings = getSettings();
+        const settings = await getSettings();
         return NextResponse.json({ success: true, data: settings });
     } catch (e: any) {
         return NextResponse.json({ error: e.message }, { status: 500 });
@@ -22,7 +22,7 @@ export async function PUT(request: NextRequest) {
         if (auth.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
         const body = await request.json();
-        const newSettings = updateSettings(body);
+        const newSettings = await updateSettings(body);
 
         return NextResponse.json({ success: true, data: newSettings });
     } catch (e: any) {

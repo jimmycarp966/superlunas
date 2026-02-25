@@ -1,4 +1,5 @@
 import { Registration, ClientRecord } from "./types";
+import { supabase } from "./supabase";
 import * as xlsx from "xlsx";
 
 declare global {
@@ -6,28 +7,151 @@ declare global {
     var clientsCache: ClientRecord[] | undefined;
 }
 
-export const getRegistrations = (): Registration[] => {
-    if (!global.appRegistrations) global.appRegistrations = [];
-    return global.appRegistrations;
+const rowToRegistration = (row: Record<string, unknown>): Registration => ({
+    id: String(row.id),
+    fecha: String(row.fecha),
+    vendedor: String(row.vendedor ?? ""),
+    zona: String(row.zona ?? ""),
+    cliente: String(row.cliente ?? ""),
+    nroCliente: String(row.nro_cliente ?? ""),
+    dni: String(row.dni ?? ""),
+    telefono: String(row.telefono ?? ""),
+    localidad: String(row.localidad ?? ""),
+    productos: String(row.productos ?? ""),
+    planes: String(row.planes ?? ""),
+    anticipo: String(row.anticipo ?? ""),
+    total: String(row.total ?? ""),
+    conyugue: String(row.conyugue ?? ""),
+    dniConyugue: String(row.dni_conyugue ?? ""),
+    telConyugue: String(row.tel_conyugue ?? ""),
+    observaciones: String(row.observaciones ?? ""),
+});
+
+const registrationToRow = (r: Registration) => ({
+    id: r.id,
+    fecha: r.fecha,
+    vendedor: r.vendedor,
+    zona: r.zona,
+    cliente: r.cliente,
+    nro_cliente: r.nroCliente,
+    dni: r.dni,
+    telefono: r.telefono,
+    localidad: r.localidad,
+    productos: r.productos,
+    planes: r.planes,
+    anticipo: r.anticipo,
+    total: r.total,
+    conyugue: r.conyugue,
+    dni_conyugue: r.dniConyugue,
+    tel_conyugue: r.telConyugue,
+    observaciones: r.observaciones,
+});
+
+const rowToClient = (row: Record<string, unknown>): ClientRecord => ({
+    nombre: String(row.nombre),
+    dni: String(row.dni ?? ""),
+    telefono: String(row.telefono ?? ""),
+    localidad: String(row.localidad ?? ""),
+    conyugue: String(row.conyugue ?? ""),
+    dniConyugue: String(row.dni_conyugue ?? ""),
+    telConyugue: String(row.tel_conyugue ?? ""),
+    zona: String(row.zona ?? ""),
+    nroCliente: String(row.nro_cliente ?? ""),
+});
+
+const clientToRow = (c: ClientRecord) => ({
+    nombre: c.nombre,
+    dni: c.dni,
+    telefono: c.telefono,
+    localidad: c.localidad,
+    conyugue: c.conyugue,
+    dni_conyugue: c.dniConyugue,
+    tel_conyugue: c.telConyugue,
+    zona: c.zona,
+    nro_cliente: c.nroCliente,
+});
+
+export const getRegistrations = async (): Promise<Registration[]> => {
+    const { data, error } = await supabase
+        .from("registrations")
+        .select("*")
+        .order("fecha", { ascending: false });
+
+    if (error || !data) return [];
+
+    const regs = (data as Record<string, unknown>[]).map(rowToRegistration);
+    global.appRegistrations = regs;
+    return regs;
 };
 
-export const addRegistration = (data: Omit<Registration, "id" | "fecha">): Registration => {
+export const addOrUpdateClient = async (client: ClientRecord): Promise<void> => {
+    const nombre = client.nombre.toUpperCase().trim();
+    const normalized: ClientRecord = { ...client, nombre };
+
+    await supabase
+        .from("clients")
+        .upsert(clientToRow(normalized), { onConflict: "nombre" });
+
+    if (!global.clientsCache) global.clientsCache = [];
+    const idx = global.clientsCache.findIndex(c => c.nombre === nombre);
+    if (idx >= 0) {
+        global.clientsCache = [
+            ...global.clientsCache.slice(0, idx),
+            { ...global.clientsCache[idx], ...normalized },
+            ...global.clientsCache.slice(idx + 1),
+        ];
+    } else {
+        global.clientsCache = [normalized, ...global.clientsCache];
+    }
+};
+
+export const addRegistration = async (data: Omit<Registration, "id" | "fecha">): Promise<Registration> => {
     const reg: Registration = {
         ...data,
         id: Date.now().toString(),
         fecha: new Date().toISOString(),
     };
+
+    await supabase.from("registrations").insert(registrationToRow(reg));
+
     if (!global.appRegistrations) global.appRegistrations = [];
     global.appRegistrations = [reg, ...global.appRegistrations];
+
+    if (data.cliente) {
+        await addOrUpdateClient({
+            nombre: data.cliente,
+            dni: data.dni,
+            telefono: data.telefono,
+            localidad: data.localidad,
+            conyugue: data.conyugue,
+            dniConyugue: data.dniConyugue,
+            telConyugue: data.telConyugue,
+            zona: data.zona,
+            nroCliente: data.nroCliente,
+        });
+    }
+
     return reg;
 };
 
-export const getClients = (): ClientRecord[] => {
-    if (!global.clientsCache) global.clientsCache = [];
+export const getClients = async (): Promise<ClientRecord[]> => {
+    if (global.clientsCache && global.clientsCache.length > 0) return global.clientsCache;
+
+    const { data, error } = await supabase
+        .from("clients")
+        .select("*")
+        .order("nombre", { ascending: true });
+
+    if (error || !data) {
+        if (!global.clientsCache) global.clientsCache = [];
+        return global.clientsCache;
+    }
+
+    global.clientsCache = (data as Record<string, unknown>[]).map(rowToClient);
     return global.clientsCache;
 };
 
-export const loadClientsFromBuffer = (buffer: Buffer): number => {
+export const loadClientsFromBuffer = async (buffer: Buffer): Promise<number> => {
     const wb = xlsx.read(buffer, { type: "buffer" });
     const ws = wb.Sheets[wb.SheetNames[0]];
     const rows = xlsx.utils.sheet_to_json(ws, { defval: "" }) as Record<string, unknown>[];
@@ -51,6 +175,11 @@ export const loadClientsFromBuffer = (buffer: Buffer): number => {
             nroCliente: String(row["N° CLIENTE"] || row["Nº CLIENTE"] || ""),
         });
     });
+
+    await supabase.from("clients").delete().neq("nombre", "");
+    if (clients.length > 0) {
+        await supabase.from("clients").insert(clients.map(clientToRow));
+    }
 
     global.clientsCache = clients;
     return clients.length;
