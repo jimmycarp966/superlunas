@@ -14,6 +14,9 @@ const defaultSettings: Settings = {
         local: "(Catamarca / T. Ralo)",
         valles: "(Catamarca / Valles)",
     },
+    listaMarkups: {
+        valles: 5,
+    },
 };
 
 const defaultPlans: Plan[] = [
@@ -27,6 +30,7 @@ const rowToSettings = (row: Record<string, unknown>): Settings => ({
     redondeoCuota: (row.redondeo_cuota as 0 | 2) ?? defaultSettings.redondeoCuota,
     listas: (row.listas as string[]) ?? defaultSettings.listas,
     listaLabels: (row.lista_labels as Record<string, string>) ?? defaultSettings.listaLabels,
+    listaMarkups: (row.lista_markups as Record<string, number>) ?? defaultSettings.listaMarkups,
 });
 
 const settingsToRow = (s: Settings) => ({
@@ -35,6 +39,7 @@ const settingsToRow = (s: Settings) => ({
     redondeo_cuota: s.redondeoCuota,
     listas: s.listas,
     lista_labels: s.listaLabels ?? {},
+    lista_markups: s.listaMarkups ?? {},
 });
 
 const rowToPlan = (row: Record<string, unknown>): Plan => ({

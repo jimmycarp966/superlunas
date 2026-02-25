@@ -17,6 +17,7 @@ export interface Settings {
     redondeoCuota: 2 | 0;
     listas: string[];
     listaLabels?: Record<string, string>;
+    listaMarkups?: Record<string, number>; // % de recargo por lista, ej: { valles: 5 }
 }
 
 export interface Plan {

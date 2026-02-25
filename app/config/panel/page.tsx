@@ -661,6 +661,42 @@ export default function AdminPanel() {
                                 <hr className="border-neutral-800" />
 
                                 <div>
+                                    <label className="block text-sm font-medium text-white mb-1">Recargo por lista</label>
+                                    <p className="text-neutral-500 text-xs mb-3">
+                                        Porcentaje de aumento sobre los precios base (lista local) para cada lista adicional. Los productos siempre se suben desde un solo PDF.
+                                    </p>
+                                    <div className="space-y-3">
+                                        {settings.listas.filter((l: string) => l !== "local").map((lst: string) => (
+                                            <div key={lst} className="flex items-center gap-3">
+                                                <span className="text-white text-sm font-bold uppercase w-20">{lst}</span>
+                                                <input
+                                                    type="number"
+                                                    min={0}
+                                                    step={0.5}
+                                                    value={settings.listaMarkups?.[lst] ?? 0}
+                                                    onChange={(e) => setSettings({
+                                                        ...settings,
+                                                        listaMarkups: { ...settings.listaMarkups, [lst]: Number(e.target.value) }
+                                                    })}
+                                                    className="w-24 bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500"
+                                                />
+                                                <span className="text-neutral-400 text-sm">%</span>
+                                                <span className="text-neutral-500 text-xs">
+                                                    {settings.listaMarkups?.[lst] > 0
+                                                        ? `+${settings.listaMarkups[lst]}% sobre precio local`
+                                                        : "Sin recargo"}
+                                                </span>
+                                            </div>
+                                        ))}
+                                        {settings.listas.filter((l: string) => l !== "local").length === 0 && (
+                                            <p className="text-neutral-600 text-xs">No hay listas adicionales configuradas.</p>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <hr className="border-neutral-800" />
+
+                                <div>
                                     <label className="block text-sm font-medium text-white mb-4">Reglas de redondeo</label>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         <div>
