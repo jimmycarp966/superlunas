@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { ClipboardList, RotateCcw, Check } from "lucide-react";
-import { calcPlanStats, generateFichaText, formatARS } from "./utils";
+import { calcPlanStats, generatePresupuestoText, formatARS } from "./utils";
 import RegistrationModal from "./RegistrationModal";
 
 // ─── Plan card ────────────────────────────────────────────────────────────────
@@ -161,7 +161,7 @@ function CotizadorCol({ products, plans, settings, onFicha }: ColProps) {
                     <ClipboardList className="w-4 h-4" /> FICHA
                 </button>
                 <button
-                    onClick={() => navigator.clipboard.writeText(generateFichaText(calc))}
+                    onClick={() => navigator.clipboard.writeText(generatePresupuestoText(calc))}
                     className={`${btnBlue} flex items-center justify-center gap-1.5`}
                 >
                     <ClipboardList className="w-4 h-4" /> COPIAR

@@ -40,6 +40,9 @@ export interface Registration {
     dni: string;
     telefono: string;
     localidad: string;
+    rubro: string;
+    domCom: string;
+    domPar: string;
     productos: string;
     planes: string;
     anticipo: string;
@@ -55,6 +58,9 @@ export interface ClientRecord {
     dni: string;
     telefono: string;
     localidad: string;
+    rubro: string;
+    domCom: string;
+    domPar: string;
     conyugue: string;
     dniConyugue: string;
     telConyugue: string;
