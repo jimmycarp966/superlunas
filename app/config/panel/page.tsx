@@ -5,7 +5,7 @@ import {
     Settings, RefreshCw, Upload, Lock, FileText,
     CheckCircle, AlertTriangle, Database, CreditCard,
     SlidersHorizontal, X, ArrowLeft, Plus, Trash2,
-    ChevronRight, Loader2,
+    ChevronRight, Loader2, Users,
 } from "lucide-react";
 
 type ToastType = "success" | "error" | "info";
@@ -16,7 +16,7 @@ interface Toast {
 }
 
 export default function AdminPanel() {
-    const [tab, setTab] = useState<"origen" | "planes" | "ajustes">("origen");
+    const [tab, setTab] = useState<"origen" | "planes" | "ajustes" | "registros" | "clientes">("origen");
     const [sourceStatus, setSourceStatus] = useState<any>(null);
     const [loadingRefresh, setLoadingRefresh] = useState(false);
     const [loadingUpload, setLoadingUpload] = useState(false);
@@ -29,11 +29,32 @@ export default function AdminPanel() {
     const [savingSettings, setSavingSettings] = useState(false);
     const [savingPlans, setSavingPlans] = useState(false);
 
+    // Registros tab state
+    const [registrations, setRegistrations] = useState<any[]>([]);
+    const [loadingRegistrations, setLoadingRegistrations] = useState(false);
+    const [expandedRegId, setExpandedRegId] = useState<string | null>(null);
+
+    // Clientes tab state
+    const [clientsFile, setClientsFile] = useState<File | null>(null);
+    const clientsFileRef = useRef<HTMLInputElement>(null);
+    const [loadingClientsUpload, setLoadingClientsUpload] = useState(false);
+    const [clientsCount, setClientsCount] = useState<number | null>(null);
+    const [clientsPreview, setClientsPreview] = useState<any[]>([]);
+    const [loadingClients, setLoadingClients] = useState(false);
+
     useEffect(() => {
         fetchStatus();
         fetchSettings();
         fetchPlans();
     }, []);
+
+    useEffect(() => {
+        if (tab === "registros") {
+            fetchRegistrations();
+        } else if (tab === "clientes") {
+            fetchClientsPreview();
+        }
+    }, [tab]);
 
     const showToast = (type: ToastType, message: string) => {
         setToast({ type, message });
@@ -58,6 +79,28 @@ export default function AdminPanel() {
         const res = await fetch("/api/plans");
         const json = await res.json();
         if (json.success) setPlans(json.data.sort((a: any, b: any) => a.orden - b.orden));
+    };
+
+    const fetchRegistrations = async () => {
+        setLoadingRegistrations(true);
+        try {
+            const res = await fetch("/api/registrations");
+            const json = await res.json();
+            if (json.success) setRegistrations(json.data);
+        } catch { } finally {
+            setLoadingRegistrations(false);
+        }
+    };
+
+    const fetchClientsPreview = async () => {
+        setLoadingClients(true);
+        try {
+            const res = await fetch("/api/clients");
+            const json = await res.json();
+            if (json.success) setClientsPreview(json.data.slice(0, 10));
+        } catch { } finally {
+            setLoadingClients(false);
+        }
     };
 
     const handleRefreshSource = async () => {
@@ -155,11 +198,49 @@ export default function AdminPanel() {
         setPlans(plans.filter((_, idx) => idx !== i));
     };
 
+    const handleClientsFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files?.[0]) setClientsFile(e.target.files[0]);
+    };
+
+    const handleClientsUpload = async () => {
+        if (!clientsFile) return;
+        const formData = new FormData();
+        formData.append("file", clientsFile);
+        setLoadingClientsUpload(true);
+        try {
+            const res = await fetch("/api/clients", { method: "POST", body: formData });
+            const data = await res.json();
+            if (data.success) {
+                showToast("success", `${data.count} clientes cargados correctamente`);
+                setClientsCount(data.count);
+                setClientsFile(null);
+                if (clientsFileRef.current) clientsFileRef.current.value = "";
+                await fetchClientsPreview();
+            } else {
+                showToast("error", data.error || "Error al subir el archivo");
+            }
+        } catch (err: any) {
+            showToast("error", "Error: " + err.message);
+        } finally {
+            setLoadingClientsUpload(false);
+        }
+    };
+
     const navItems = [
         { id: "origen", label: "Catálogo", icon: Database },
         { id: "planes", label: "Planes de Pago", icon: CreditCard },
         { id: "ajustes", label: "Ajustes", icon: SlidersHorizontal },
+        { id: "registros", label: "Registros", icon: FileText },
+        { id: "clientes", label: "Clientes", icon: Users },
     ];
+
+    const formatDate = (iso: string) => {
+        try {
+            return new Date(iso).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" });
+        } catch {
+            return iso;
+        }
+    };
 
     return (
         <div className="min-h-screen bg-neutral-950 text-neutral-200">
@@ -301,7 +382,6 @@ export default function AdminPanel() {
                                     Acepta archivos <span className="text-neutral-300">.pdf</span> o <span className="text-neutral-300">.xlsx</span>. El catálogo se actualiza en memoria al instante.
                                 </p>
 
-                                {/* Zona de drop / selección */}
                                 <label className={`
                                     relative flex flex-col items-center justify-center w-full rounded-xl border-2 border-dashed transition-colors cursor-pointer
                                     ${selectedFile
@@ -384,7 +464,6 @@ export default function AdminPanel() {
                                 {plans.map((plan, i) => (
                                     <div key={plan.id} className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4">
                                         <div className="flex items-center gap-3 flex-wrap">
-                                            {/* Nombre */}
                                             <div className="flex-1 min-w-[140px]">
                                                 <label className="text-xs text-neutral-500 mb-1 block">Nombre</label>
                                                 <input
@@ -394,7 +473,6 @@ export default function AdminPanel() {
                                                     className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
                                                 />
                                             </div>
-                                            {/* Semanas */}
                                             <div className="w-24">
                                                 <label className="text-xs text-neutral-500 mb-1 block">Semanas</label>
                                                 <input
@@ -404,7 +482,6 @@ export default function AdminPanel() {
                                                     className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white text-center focus:outline-none focus:border-indigo-500"
                                                 />
                                             </div>
-                                            {/* Tasa */}
                                             <div className="w-24">
                                                 <label className="text-xs text-neutral-500 mb-1 block">Tasa %</label>
                                                 <div className="relative">
@@ -417,7 +494,6 @@ export default function AdminPanel() {
                                                     <span className="absolute right-2 top-2 text-neutral-500 text-xs">%</span>
                                                 </div>
                                             </div>
-                                            {/* Badge */}
                                             <div className="w-32">
                                                 <label className="text-xs text-neutral-500 mb-1 block">Badge</label>
                                                 <input
@@ -428,7 +504,6 @@ export default function AdminPanel() {
                                                     className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-indigo-500"
                                                 />
                                             </div>
-                                            {/* Orden */}
                                             <div className="w-16">
                                                 <label className="text-xs text-neutral-500 mb-1 block">Orden</label>
                                                 <input
@@ -438,7 +513,6 @@ export default function AdminPanel() {
                                                     className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white text-center focus:outline-none focus:border-indigo-500"
                                                 />
                                             </div>
-                                            {/* Activo */}
                                             <div className="flex flex-col items-center gap-1">
                                                 <label className="text-xs text-neutral-500">Activo</label>
                                                 <label className="relative inline-flex items-center cursor-pointer">
@@ -451,7 +525,6 @@ export default function AdminPanel() {
                                                     <div className="w-10 h-5 bg-neutral-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-500 relative"></div>
                                                 </label>
                                             </div>
-                                            {/* Eliminar */}
                                             <button
                                                 onClick={() => removePlan(i)}
                                                 className="mt-4 p-2 text-neutral-600 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
@@ -495,7 +568,6 @@ export default function AdminPanel() {
                             </div>
 
                             <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-5 space-y-6">
-                                {/* Listas */}
                                 <div>
                                     <label className="block text-sm font-medium text-white mb-1">Listas disponibles</label>
                                     <p className="text-neutral-500 text-xs mb-3">Nombres separados por coma. Aparecerán en el selector del cotizador.</p>
@@ -510,7 +582,6 @@ export default function AdminPanel() {
 
                                 <hr className="border-neutral-800" />
 
-                                {/* Redondeo */}
                                 <div>
                                     <label className="block text-sm font-medium text-white mb-4">Reglas de redondeo</label>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -538,6 +609,243 @@ export default function AdminPanel() {
                                         </div>
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ── TAB: REGISTROS ── */}
+                    {tab === "registros" && (
+                        <div className="space-y-5">
+                            <div className="flex items-center justify-between">
+                                <h2 className="text-xl font-bold text-white">Registros de Ventas</h2>
+                                <div className="flex items-center gap-3">
+                                    <span className="text-sm text-neutral-400">{registrations.length} registros</span>
+                                    <button
+                                        onClick={fetchRegistrations}
+                                        disabled={loadingRegistrations}
+                                        className="flex items-center gap-2 px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 rounded-lg text-sm text-white transition-colors disabled:opacity-50"
+                                    >
+                                        <RefreshCw className={`w-4 h-4 ${loadingRegistrations ? "animate-spin" : ""}`} />
+                                        Actualizar
+                                    </button>
+                                </div>
+                            </div>
+
+                            {loadingRegistrations ? (
+                                <div className="flex items-center justify-center py-12 text-neutral-500">
+                                    <Loader2 className="w-6 h-6 animate-spin mr-2" />
+                                    Cargando registros...
+                                </div>
+                            ) : registrations.length === 0 ? (
+                                <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-8 text-center">
+                                    <FileText className="w-10 h-10 text-neutral-700 mx-auto mb-3" />
+                                    <p className="text-neutral-500 text-sm">No hay registros todavía.</p>
+                                    <p className="text-neutral-600 text-xs mt-1">Los registros se guardan desde el cotizador al hacer clic en FICHA.</p>
+                                </div>
+                            ) : (
+                                <div className="bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden">
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-sm">
+                                            <thead>
+                                                <tr className="border-b border-neutral-800">
+                                                    <th className="text-left px-4 py-3 text-neutral-500 font-medium text-xs">Fecha</th>
+                                                    <th className="text-left px-4 py-3 text-neutral-500 font-medium text-xs">Vendedor</th>
+                                                    <th className="text-left px-4 py-3 text-neutral-500 font-medium text-xs">Cliente</th>
+                                                    <th className="text-left px-4 py-3 text-neutral-500 font-medium text-xs">Zona</th>
+                                                    <th className="text-left px-4 py-3 text-neutral-500 font-medium text-xs">Productos</th>
+                                                    <th className="text-left px-4 py-3 text-neutral-500 font-medium text-xs">Plan</th>
+                                                    <th className="text-left px-4 py-3 text-neutral-500 font-medium text-xs">Total</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {registrations.map(reg => (
+                                                    <>
+                                                        <tr
+                                                            key={reg.id}
+                                                            onClick={() => setExpandedRegId(expandedRegId === reg.id ? null : reg.id)}
+                                                            className="border-b border-neutral-800/60 hover:bg-neutral-800/40 cursor-pointer transition-colors"
+                                                        >
+                                                            <td className="px-4 py-3 text-neutral-400 text-xs whitespace-nowrap">{formatDate(reg.fecha)}</td>
+                                                            <td className="px-4 py-3 text-white font-medium">{reg.vendedor || "—"}</td>
+                                                            <td className="px-4 py-3 text-white">{reg.cliente}</td>
+                                                            <td className="px-4 py-3 text-neutral-400">{reg.zona || "—"}</td>
+                                                            <td className="px-4 py-3 text-neutral-300 max-w-[200px]">
+                                                                <span className="truncate block" title={reg.productos}>
+                                                                    {reg.productos.length > 40 ? reg.productos.slice(0, 40) + "…" : reg.productos}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-4 py-3 text-neutral-300 text-xs max-w-[160px]">
+                                                                <span className="truncate block" title={reg.planes}>{reg.planes || "—"}</span>
+                                                            </td>
+                                                            <td className="px-4 py-3 text-emerald-400 font-semibold whitespace-nowrap">
+                                                                {reg.total ? `$${reg.total}` : "—"}
+                                                            </td>
+                                                        </tr>
+                                                        {expandedRegId === reg.id && (
+                                                            <tr key={`${reg.id}-expanded`} className="bg-neutral-800/30">
+                                                                <td colSpan={7} className="px-4 py-4">
+                                                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+                                                                        {[
+                                                                            ["ID", reg.id],
+                                                                            ["Fecha", formatDate(reg.fecha)],
+                                                                            ["Vendedor", reg.vendedor],
+                                                                            ["Cliente", reg.cliente],
+                                                                            ["N° Cliente", reg.nroCliente],
+                                                                            ["DNI", reg.dni],
+                                                                            ["Teléfono", reg.telefono],
+                                                                            ["Localidad", reg.localidad],
+                                                                            ["Zona", reg.zona],
+                                                                            ["Productos", reg.productos],
+                                                                            ["Plan", reg.planes],
+                                                                            ["Anticipo", reg.anticipo],
+                                                                            ["Total", reg.total],
+                                                                            ["Cónyuge", reg.conyugue],
+                                                                            ["DNI Cónyuge", reg.dniConyugue],
+                                                                            ["Tel. Cónyuge", reg.telConyugue],
+                                                                            ["Observaciones", reg.observaciones],
+                                                                        ].map(([label, value]) => (
+                                                                            <div key={label} className="bg-neutral-900 rounded-lg p-2 border border-neutral-700">
+                                                                                <p className="text-neutral-500 mb-0.5">{label}</p>
+                                                                                <p className="text-neutral-200 font-medium break-words">{value || "—"}</p>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        )}
+                                                    </>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* ── TAB: CLIENTES ── */}
+                    {tab === "clientes" && (
+                        <div className="space-y-5">
+                            <h2 className="text-xl font-bold text-white">Gestión de Clientes</h2>
+
+                            {/* Upload clientes */}
+                            <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-5">
+                                <h3 className="font-semibold text-white mb-1">Subir lista de clientes</h3>
+                                <p className="text-neutral-500 text-sm mb-4">
+                                    Sube el archivo Excel (<span className="text-neutral-300">.xlsx</span>) con el historial de clientes. Se usa para autocompletar el formulario de registro.
+                                </p>
+
+                                <label className={`
+                                    relative flex flex-col items-center justify-center w-full rounded-xl border-2 border-dashed transition-colors cursor-pointer
+                                    ${clientsFile
+                                        ? "border-indigo-500/60 bg-indigo-500/5 py-5"
+                                        : "border-neutral-700 hover:border-indigo-500/40 hover:bg-neutral-800/40 py-10"
+                                    }
+                                    ${loadingClientsUpload ? "pointer-events-none opacity-50" : ""}
+                                `}>
+                                    {clientsFile ? (
+                                        <div className="flex items-center gap-3 px-4">
+                                            <FileText className="w-8 h-8 text-indigo-400 shrink-0" />
+                                            <div className="min-w-0">
+                                                <p className="text-white font-medium text-sm truncate">{clientsFile.name}</p>
+                                                <p className="text-neutral-500 text-xs">{(clientsFile.size / 1024).toFixed(1)} KB</p>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    setClientsFile(null);
+                                                    if (clientsFileRef.current) clientsFileRef.current.value = "";
+                                                }}
+                                                className="ml-auto p-1 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-700 transition-colors"
+                                            >
+                                                <X className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-col items-center gap-2 text-center px-4">
+                                            <Upload className="w-8 h-8 text-neutral-600" />
+                                            <p className="text-sm text-neutral-400">
+                                                <span className="text-indigo-400 font-medium">Clic para seleccionar</span> o arrastrá el archivo aquí
+                                            </p>
+                                            <p className="text-xs text-neutral-600">.xlsx</p>
+                                        </div>
+                                    )}
+                                    <input
+                                        ref={clientsFileRef}
+                                        type="file"
+                                        className="hidden"
+                                        accept=".xlsx"
+                                        onChange={handleClientsFileSelect}
+                                    />
+                                </label>
+
+                                {clientsFile && (
+                                    <button
+                                        onClick={handleClientsUpload}
+                                        disabled={loadingClientsUpload}
+                                        className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-medium rounded-xl text-sm transition-colors"
+                                    >
+                                        {loadingClientsUpload
+                                            ? <><Loader2 className="w-4 h-4 animate-spin" /> Procesando...</>
+                                            : <><Upload className="w-4 h-4" /> Subir y cargar clientes</>
+                                        }
+                                    </button>
+                                )}
+
+                                {clientsCount !== null && (
+                                    <div className="mt-3 flex items-center gap-2 text-sm text-emerald-400">
+                                        <CheckCircle className="w-4 h-4" />
+                                        {clientsCount} clientes cargados en memoria
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Preview */}
+                            <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-5">
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className="font-semibold text-white">Primeros clientes cargados</h3>
+                                    <button
+                                        onClick={fetchClientsPreview}
+                                        disabled={loadingClients}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 rounded-lg text-xs text-white transition-colors disabled:opacity-50"
+                                    >
+                                        <RefreshCw className={`w-3 h-3 ${loadingClients ? "animate-spin" : ""}`} />
+                                        Actualizar
+                                    </button>
+                                </div>
+
+                                {loadingClients ? (
+                                    <div className="flex items-center gap-2 text-neutral-500 text-sm py-4">
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        Cargando...
+                                    </div>
+                                ) : clientsPreview.length === 0 ? (
+                                    <p className="text-neutral-500 text-sm">Sin clientes cargados. Sube el archivo Excel primero.</p>
+                                ) : (
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-sm">
+                                            <thead>
+                                                <tr className="border-b border-neutral-800">
+                                                    <th className="text-left px-3 py-2 text-neutral-500 font-medium text-xs">Nombre</th>
+                                                    <th className="text-left px-3 py-2 text-neutral-500 font-medium text-xs">DNI</th>
+                                                    <th className="text-left px-3 py-2 text-neutral-500 font-medium text-xs">Teléfono</th>
+                                                    <th className="text-left px-3 py-2 text-neutral-500 font-medium text-xs">Localidad</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {clientsPreview.map((c, i) => (
+                                                    <tr key={i} className="border-b border-neutral-800/60 hover:bg-neutral-800/30">
+                                                        <td className="px-3 py-2 text-white font-medium">{c.nombre}</td>
+                                                        <td className="px-3 py-2 text-neutral-400">{c.dni || "—"}</td>
+                                                        <td className="px-3 py-2 text-neutral-400">{c.telefono || "—"}</td>
+                                                        <td className="px-3 py-2 text-neutral-400">{c.localidad || "—"}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}

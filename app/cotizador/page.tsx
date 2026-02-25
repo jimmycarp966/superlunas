@@ -2,59 +2,9 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { Search, Check, Trash2, X, Share2, ClipboardList, RotateCcw } from "lucide-react";
-
-// Helper: calcula estadísticas de planes dado subtotal y anticipo
-function calcPlanStats(subtotal: number, anticipo: number, plans: any[], settings: any) {
-    const roundDecimal = (num: number, decimals: number) => {
-        const f = Math.pow(10, decimals);
-        return Math.round(num * f) / f;
-    };
-    const rdTotal = settings?.redondeoTotal ?? 2;
-    const rdCuota = settings?.redondeoCuota ?? 2;
-
-    return plans.map(p => {
-        let calcTotal = subtotal;
-        if (p.tasaPorcentaje > 0) {
-            calcTotal = subtotal * (1 + (p.tasaPorcentaje / 100));
-        }
-        calcTotal = roundDecimal(calcTotal, rdTotal);
-        let saldo = calcTotal - anticipo;
-        if (saldo < 0) saldo = 0;
-        let cuota = 0;
-        if (p.semanas > 0) {
-            cuota = roundDecimal(saldo / p.semanas, rdCuota);
-        } else {
-            cuota = saldo;
-        }
-        return { ...p, calcTotal, saldo, cuota };
-    });
-}
-
-// Helper: genera texto de ficha con TODOS los planes
-function generateFichaText(calc: { subtotal: number; anticipo: number; itemsText: string; planStats: any[] }): string {
-    if (calc.subtotal === 0) return "";
-    const lineas = [
-        `*🛒 COTIZACIÓN - LUNAS CONFORT*`,
-        ``,
-        `*Productos:*`,
-        ...calc.itemsText.split(",").map(i => `• ${i.trim()}`),
-        ``,
-        `*Opciones de pago:*`,
-    ];
-    calc.planStats.forEach(p => {
-        if (p.semanas === 0) {
-            lineas.push(`💵 Contado: *$${p.calcTotal}*`);
-        } else {
-            lineas.push(`🗓️ ${p.semanas} cuotas semanales de *$${p.cuota}* (Total: $${p.calcTotal})`);
-        }
-    });
-    if (calc.anticipo > 0) {
-        lineas.push(``, `💰 Anticipo: $${calc.anticipo}`);
-    }
-    lineas.push(``, `_Cotización sujeta a modificaciones. Válido por hoy._`);
-    return lineas.join("\n");
-}
+import { Search, Check, Trash2, ClipboardList, RotateCcw } from "lucide-react";
+import { calcPlanStats, generateFichaText, formatARS } from "./utils";
+import RegistrationModal from "./RegistrationModal";
 
 export default function CotizadorPage() {
     // Configuración y datos
@@ -83,9 +33,10 @@ export default function CotizadorPage() {
     const [manualQty, setManualQty] = useState<number>(1);
     const [manualAnticipo, setManualAnticipo] = useState<number>(0);
 
-    // Ficha
-    const [showFicha, setShowFicha] = useState(false);
-    const [fichaPreview, setFichaPreview] = useState("");
+    // Registration modal
+    const [showRegistration, setShowRegistration] = useState(false);
+    const [activeCalc, setActiveCalc] = useState<any | null>(null);
+    const [activeColLabel, setActiveColLabel] = useState("");
 
     useEffect(() => {
         fetchInitialData();
@@ -138,7 +89,9 @@ export default function CotizadorPage() {
     const simpleCalc = useMemo(() => {
         const subtotal = (simpleProduct?.precio || 0) * simpleQty;
         const anticipo = simpleAnticipo;
-        const itemsText = simpleProduct ? `${simpleQty}x ${simpleProduct.nombre} ($${simpleProduct.precio})` : "";
+        const itemsText = simpleProduct
+            ? (simpleQty > 1 ? simpleQty + "x " : "") + "[" + simpleProduct.codigo + "] " + simpleProduct.nombre
+            : "";
         const planStats = calcPlanStats(subtotal, anticipo, plans, settings);
         return { subtotal, anticipo, planStats, itemsText };
     }, [simpleProduct, simpleQty, simpleAnticipo, plans, settings]);
@@ -146,7 +99,7 @@ export default function CotizadorPage() {
     const cartCalc = useMemo(() => {
         const subtotal = cartItems.reduce((acc, item) => acc + (item.precio * item.qty), 0);
         const anticipo = cartAnticipo;
-        const itemsText = cartItems.map(i => `${i.qty}x ${i.nombre} ($${i.precio})`).join(", ");
+        const itemsText = cartItems.map(i => (i.qty > 1 ? i.qty + "x " : "") + "[" + i.codigo + "] " + i.nombre).join(", ");
         const planStats = calcPlanStats(subtotal, anticipo, plans, settings);
         return { subtotal, anticipo, planStats, itemsText };
     }, [cartItems, cartAnticipo, plans, settings]);
@@ -154,7 +107,7 @@ export default function CotizadorPage() {
     const manualCalc = useMemo(() => {
         const subtotal = manualPrice * manualQty;
         const anticipo = manualAnticipo;
-        const itemsText = `${manualQty}x ${manualName || "Producto Libre"} ($${manualPrice})`;
+        const itemsText = (manualQty > 1 ? manualQty + "x " : "") + (manualName || "Producto Libre") + " ($" + manualPrice + ")";
         const planStats = calcPlanStats(subtotal, anticipo, plans, settings);
         return { subtotal, anticipo, planStats, itemsText };
     }, [manualName, manualPrice, manualQty, manualAnticipo, plans, settings]);
@@ -165,15 +118,6 @@ export default function CotizadorPage() {
             return;
         }
         alert(`Stock de "${simpleProduct.nombre}": ${simpleProduct.stock} unidades`);
-    };
-
-    const copyToClipboard = (text: string) => {
-        navigator.clipboard.writeText(text);
-    };
-
-    const sendWhatsApp = () => {
-        const encoded = encodeURIComponent(fichaPreview);
-        window.open(`https://wa.me/?text=${encoded}`, "_blank");
     };
 
     if (loading) {
@@ -287,38 +231,31 @@ export default function CotizadorPage() {
 
                         <div className="flex gap-2">
                             <button
-                                onClick={() => {
-                                    const text = generateFichaText(simpleCalc);
-                                    setFichaPreview(text);
-                                    setShowFicha(true);
-                                }}
+                                onClick={() => { setActiveCalc(simpleCalc); setActiveColLabel("SIMPLE"); setShowRegistration(true); }}
                                 className="flex-1 bg-emerald-500 hover:bg-emerald-400 text-white font-bold py-2 rounded-lg text-sm transition-colors flex justify-center items-center gap-2"
                             >
                                 <ClipboardList className="w-4 h-4" /> FICHA
                             </button>
                             <button
-                                onClick={() => {
-                                    const text = generateFichaText(simpleCalc);
-                                    copyToClipboard(text);
-                                }}
+                                onClick={() => navigator.clipboard.writeText(generateFichaText(simpleCalc))}
                                 className="flex-1 bg-[#25A1ED] hover:bg-blue-400 text-white font-bold py-2 rounded-lg text-sm transition-colors flex justify-center items-center gap-2"
                             >
                                 <ClipboardList className="w-4 h-4" /> COPIAR
                             </button>
                         </div>
 
-                        {/* Price box: siempre activo para esta columna */}
+                        {/* Price box */}
                         <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 border-l-4 border-l-yellow-400 min-h-[100px]">
                             <div className="text-yellow-400 text-lg font-bold">
                                 -
                                 <br />
-                                ${simpleCalc.subtotal > 0 ? simpleCalc.subtotal : 0}
+                                ${simpleCalc.subtotal > 0 ? formatARS(simpleCalc.subtotal) : 0}
                             </div>
                             {simpleCalc.subtotal > 0 && (
                                 <div className="space-y-1 mt-2">
                                     {simpleCalc.planStats.filter(p => p.semanas > 0).slice(0, 3).map((p: any) => (
                                         <div key={p.id} className="text-white text-sm font-medium">
-                                            {p.semanas} pagos semanales de <span className="text-emerald-400 font-bold">${p.cuota}</span>
+                                            {p.semanas} pagos semanales de <span className="text-emerald-400 font-bold">${formatARS(p.cuota)}</span>
                                         </div>
                                     ))}
                                 </div>
@@ -396,38 +333,31 @@ export default function CotizadorPage() {
 
                         <div className="flex gap-2">
                             <button
-                                onClick={() => {
-                                    const text = generateFichaText(cartCalc);
-                                    setFichaPreview(text);
-                                    setShowFicha(true);
-                                }}
+                                onClick={() => { setActiveCalc(cartCalc); setActiveColLabel("CARRITO"); setShowRegistration(true); }}
                                 className="flex-1 bg-emerald-500 hover:bg-emerald-400 text-white font-bold py-2 rounded-lg text-sm transition-colors flex justify-center items-center gap-2"
                             >
                                 <ClipboardList className="w-4 h-4" /> FICHA
                             </button>
                             <button
-                                onClick={() => {
-                                    const text = generateFichaText(cartCalc);
-                                    copyToClipboard(text);
-                                }}
+                                onClick={() => navigator.clipboard.writeText(generateFichaText(cartCalc))}
                                 className="flex-1 bg-[#25A1ED] hover:bg-blue-400 text-white font-bold py-2 rounded-lg text-sm transition-colors flex justify-center items-center gap-2"
                             >
                                 <ClipboardList className="w-4 h-4" /> COPIAR
                             </button>
                         </div>
 
-                        {/* Price box: siempre activo para esta columna */}
+                        {/* Price box */}
                         <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 border-l-4 border-l-yellow-400 min-h-[100px]">
                             <div className="text-yellow-400 text-lg font-bold">
                                 -
                                 <br />
-                                ${cartCalc.subtotal > 0 ? cartCalc.subtotal : 0}
+                                ${cartCalc.subtotal > 0 ? formatARS(cartCalc.subtotal) : 0}
                             </div>
                             {cartCalc.subtotal > 0 && (
                                 <div className="space-y-1 mt-2">
                                     {cartCalc.planStats.filter(p => p.semanas > 0).slice(0, 3).map((p: any) => (
                                         <div key={p.id} className="text-white text-sm font-medium">
-                                            {p.semanas} pagos semanales de <span className="text-emerald-400 font-bold">${p.cuota}</span>
+                                            {p.semanas} pagos semanales de <span className="text-emerald-400 font-bold">${formatARS(p.cuota)}</span>
                                         </div>
                                     ))}
                                 </div>
@@ -484,38 +414,31 @@ export default function CotizadorPage() {
 
                         <div className="flex gap-2">
                             <button
-                                onClick={() => {
-                                    const text = generateFichaText(manualCalc);
-                                    setFichaPreview(text);
-                                    setShowFicha(true);
-                                }}
+                                onClick={() => { setActiveCalc(manualCalc); setActiveColLabel("MANUAL"); setShowRegistration(true); }}
                                 className="flex-1 bg-emerald-500 hover:bg-emerald-400 text-white font-bold py-2 rounded-lg text-sm transition-colors flex justify-center items-center gap-2"
                             >
                                 <ClipboardList className="w-4 h-4" /> FICHA
                             </button>
                             <button
-                                onClick={() => {
-                                    const text = generateFichaText(manualCalc);
-                                    copyToClipboard(text);
-                                }}
+                                onClick={() => navigator.clipboard.writeText(generateFichaText(manualCalc))}
                                 className="flex-1 bg-[#25A1ED] hover:bg-blue-400 text-white font-bold py-2 rounded-lg text-sm transition-colors flex justify-center items-center gap-2"
                             >
                                 <ClipboardList className="w-4 h-4" /> COPIAR
                             </button>
                         </div>
 
-                        {/* Price box: siempre activo para esta columna */}
+                        {/* Price box */}
                         <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 border-l-4 border-l-yellow-400 min-h-[100px]">
                             <div className="text-yellow-400 text-lg font-bold">
                                 -
                                 <br />
-                                ${manualCalc.subtotal > 0 ? manualCalc.subtotal : 0}
+                                ${manualCalc.subtotal > 0 ? formatARS(manualCalc.subtotal) : 0}
                             </div>
                             {manualCalc.subtotal > 0 && (
                                 <div className="space-y-1 mt-2">
                                     {manualCalc.planStats.filter(p => p.semanas > 0).slice(0, 3).map((p: any) => (
                                         <div key={p.id} className="text-white text-sm font-medium">
-                                            {p.semanas} pagos semanales de <span className="text-emerald-400 font-bold">${p.cuota}</span>
+                                            {p.semanas} pagos semanales de <span className="text-emerald-400 font-bold">${formatARS(p.cuota)}</span>
                                         </div>
                                     ))}
                                 </div>
@@ -526,47 +449,12 @@ export default function CotizadorPage() {
                 </div>
             </div>
 
-            {/* MODAL DE FICHA */}
-            {showFicha && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                    <div className="w-full max-w-md bg-neutral-900 border border-neutral-800 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
-                        <div className="px-5 py-4 bg-neutral-800 flex items-center justify-between border-b border-neutral-700">
-                            <div className="flex items-center gap-2 text-white font-semibold">
-                                <ClipboardList className="w-5 h-5" />
-                                Ficha de Pedido
-                            </div>
-                            <button
-                                onClick={() => setShowFicha(false)}
-                                className="text-neutral-400 hover:text-white p-1 rounded-lg hover:bg-neutral-700 transition"
-                            >
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-
-                        <div className="p-5 overflow-y-auto flex-1">
-                            <textarea
-                                value={fichaPreview}
-                                onChange={(e) => setFichaPreview(e.target.value)}
-                                className="w-full h-64 bg-neutral-800 border border-neutral-700 rounded-xl p-4 text-sm text-neutral-300 focus:outline-none focus:border-blue-500 resize-none font-sans"
-                            />
-                            <div className="mt-4 flex gap-3">
-                                <button
-                                    onClick={() => copyToClipboard(fichaPreview)}
-                                    className="flex-1 px-4 py-3 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-white rounded-xl text-sm font-medium transition-colors"
-                                >
-                                    Copiar Texto
-                                </button>
-                                <button
-                                    onClick={sendWhatsApp}
-                                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-medium transition-colors"
-                                >
-                                    <Share2 className="w-4 h-4" />
-                                    WhatsApp
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+            {showRegistration && activeCalc && (
+                <RegistrationModal
+                    calc={activeCalc}
+                    colLabel={activeColLabel}
+                    onClose={() => setShowRegistration(false)}
+                />
             )}
         </div>
     );

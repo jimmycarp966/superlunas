@@ -28,3 +28,35 @@ export interface Plan {
     orden: number;
     badge?: string;
 }
+
+export interface Registration {
+    id: string;
+    fecha: string;
+    vendedor: string;
+    zona: string;
+    cliente: string;
+    nroCliente: string;
+    dni: string;
+    telefono: string;
+    localidad: string;
+    productos: string;
+    planes: string;
+    anticipo: string;
+    total: string;
+    conyugue: string;
+    dniConyugue: string;
+    telConyugue: string;
+    observaciones: string;
+}
+
+export interface ClientRecord {
+    nombre: string;
+    dni: string;
+    telefono: string;
+    localidad: string;
+    conyugue: string;
+    dniConyugue: string;
+    telConyugue: string;
+    zona: string;
+    nroCliente: string;
+}
