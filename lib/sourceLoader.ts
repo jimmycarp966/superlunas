@@ -189,3 +189,27 @@ export const fetchSourceFile = async (forceRefresh = false): Promise<Product[]> 
 export const getCurrentCatalog = async (opts?: { forceRefresh?: boolean }): Promise<Product[]> => {
     return await fetchSourceFile(opts?.forceRefresh);
 };
+
+// Carga directamente desde un buffer en memoria (para uploads sin escritura en disco)
+export const loadFromBuffer = async (buffer: Buffer, type: "pdf" | "excel"): Promise<number> => {
+    const now = Date.now();
+    let products: Product[];
+
+    if (type === "pdf") {
+        products = await parsePdfBuffer(buffer);
+    } else {
+        products = parseExcelBuffer(buffer);
+    }
+
+    const deduplicated = Array.from(new Map(
+        products.map(p => [`${p.codigo}-${p.lista}`, p])
+    ).values());
+
+    global.catalogCache = {
+        data: deduplicated,
+        updatedAt: now,
+        sourceVersion: `${now}-${deduplicated.length}`,
+    };
+
+    return deduplicated.length;
+};
