@@ -58,20 +58,16 @@ const planToRow = (p: Plan) => ({
 });
 
 export const getSettings = async (): Promise<Settings> => {
-    try {
-        const { data, error } = await supabase
-            .from("app_settings")
-            .select("*")
-            .eq("id", 1)
-            .single();
+    const { data, error } = await supabase
+        .from("app_settings")
+        .select("*")
+        .eq("id", 1)
+        .single();
 
-        if (error) throw new Error(error.message);
-        if (!data) return { ...defaultSettings };
+    if (error) throw new Error(`Error leyendo app_settings en Supabase: ${error.message}`);
+    if (!data) throw new Error("No existe app_settings.id=1 en Supabase");
 
-        return rowToSettings(data as Record<string, unknown>);
-    } catch {
-        return { ...defaultSettings };
-    }
+    return rowToSettings(data as Record<string, unknown>);
 };
 
 export const updateSettings = async (newSettings: Partial<Settings>): Promise<Settings> => {
@@ -86,19 +82,15 @@ export const updateSettings = async (newSettings: Partial<Settings>): Promise<Se
 };
 
 export const getPlans = async (): Promise<Plan[]> => {
-    try {
-        const { data, error } = await supabase
-            .from("plans")
-            .select("*")
-            .order("orden", { ascending: true });
+    const { data, error } = await supabase
+        .from("plans")
+        .select("*")
+        .order("orden", { ascending: true });
 
-        if (error) throw new Error(error.message);
-        if (!data || data.length === 0) return [...defaultPlans];
+    if (error) throw new Error(`Error leyendo plans en Supabase: ${error.message}`);
+    if (!data || data.length === 0) throw new Error("La tabla plans en Supabase no tiene registros");
 
-        return (data as Record<string, unknown>[]).map(rowToPlan);
-    } catch {
-        return [...defaultPlans];
-    }
+    return (data as Record<string, unknown>[]).map(rowToPlan);
 };
 
 export const updatePlans = async (newPlans: Plan[]): Promise<Plan[]> => {
