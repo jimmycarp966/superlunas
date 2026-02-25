@@ -10,9 +10,10 @@ export function calcPlanStats(subtotal: number, anticipo: number, plans: any[], 
     return plans.map(p => {
         const rawRate = Number(p.tasaPorcentaje);
         const rate = Number.isFinite(rawRate) ? rawRate : 0;
-        let calcTotal = subtotal * (1 + rate / 100);
+        const baseConAnticipo = Math.max(0, subtotal - anticipo);
+        let calcTotal = baseConAnticipo * (1 + rate / 100);
         calcTotal = round(calcTotal, rdTotal);
-        const saldo = Math.max(0, calcTotal - anticipo);
+        const saldo = calcTotal;
         const cuota = p.semanas > 0 ? round(saldo / p.semanas, rdCuota) : saldo;
         return { ...p, calcTotal, saldo, cuota };
     });
