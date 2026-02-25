@@ -26,9 +26,9 @@ function PlanCard({
     const totalMostrado = p.primeraCuotaPaga ? p.saldo : p.calcTotal;
 
     return (
-        <div className={`rounded-lg border overflow-hidden relative ${cardClass}`}>
+        <div className={`rounded-lg border overflow-visible relative ${cardClass}`}>
             {!isContado && p.badge && (
-                <span className="absolute top-1.5 right-1.5 z-10 bg-gradient-to-b from-[#ff6351] to-[#d7382b] border border-[#ff9f86]/70 text-white text-[10px] sm:text-[11px] px-3 py-1 rounded-full uppercase font-black tracking-[0.08em] whitespace-nowrap leading-none shadow-[0_2px_0_#8f1f15,0_5px_10px_rgba(0,0,0,0.35)]">
+                <span className="absolute top-0 right-2 -translate-y-1/2 z-20 bg-gradient-to-b from-[#ff6a56] to-[#cf2f22] border border-[#ffb29d]/80 text-white text-[11px] sm:text-[12px] px-4 py-1.5 rounded-full uppercase font-black tracking-[0.09em] whitespace-nowrap leading-none shadow-[0_2px_0_#8b1b12,0_7px_14px_rgba(0,0,0,0.4)]">
                     {p.badge}
                 </span>
             )}
