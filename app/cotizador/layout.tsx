@@ -1,10 +1,26 @@
 import { Lock } from "lucide-react";
+import { cookies } from "next/headers";
+import { verifyAuth } from "@/lib/auth";
 
-export default function CotizadorLayout({
+export default async function CotizadorLayout({
     children,
 }: {
     children: React.ReactNode;
 }) {
+    let isAdmin = false;
+    try {
+        const cookieStore = await cookies();
+        const token = cookieStore.get("lunas_confort_session")?.value;
+        if (token) {
+            const payload = await verifyAuth(token);
+            if (payload.role === "admin") {
+                isAdmin = true;
+            }
+        }
+    } catch {
+        // Ignorar, ya lo maneja el middleware
+    }
+
     return (
         <div className="flex flex-col min-h-screen bg-neutral-900 text-neutral-200">
             {/* Header */}
@@ -22,7 +38,15 @@ export default function CotizadorLayout({
                         <p className="text-red-600 font-bold text-[10px] uppercase tracking-wider">Todo para su hogar y comercio</p>
                     </div>
                 </div>
-                <div className="flex-1 flex justify-end items-center">
+                <div className="flex-1 flex justify-end items-center gap-4">
+                    {isAdmin && (
+                        <a
+                            href="/config/panel"
+                            className="flex items-center gap-2 px-4 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-sm font-bold tracking-wider rounded border border-neutral-700 transition-all uppercase"
+                        >
+                            Configurar
+                        </a>
+                    )}
                     <form action="/api/auth/logout" method="POST">
                         <button
                             type="submit"
