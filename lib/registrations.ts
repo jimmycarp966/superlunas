@@ -247,21 +247,29 @@ export const getClientsInsights = async (): Promise<ClientsInsights> => {
         getRegistrations(),
     ]);
 
-    const countByDni = new Map<string, number>();
+    const appearancesByDni = new Map<string, Set<string>>();
     const titularSet = new Set<string>();
     const conyugueSet = new Set<string>();
 
-    const bump = (dniRaw: string) => {
+    const trackClientAppearance = (dniRaw: string, clientMarker: string) => {
         const dni = normalizeDni(dniRaw);
         if (!dni) return;
-        countByDni.set(dni, (countByDni.get(dni) ?? 0) + 1);
+        const set = appearancesByDni.get(dni) ?? new Set<string>();
+        set.add(clientMarker);
+        appearancesByDni.set(dni, set);
     };
 
-    clients.forEach(c => bump(c.dni));
-    registrations.forEach(r => {
-        bump(r.dni);
-        bump(r.dniConyugue);
+    clients.forEach(c => {
+        const clientMarker = String(c.nombre || "").trim().toUpperCase();
+        if (!clientMarker) return;
 
+        // Duplicados visibles en "Clientes" se miden contra otras fichas de clientes,
+        // no contra el historial de registros, para evitar falsos positivos.
+        trackClientAppearance(c.dni, clientMarker);
+        trackClientAppearance(c.dniConyugue, clientMarker);
+    });
+
+    registrations.forEach(r => {
         const dniTitular = normalizeDni(r.dni);
         if (dniTitular) titularSet.add(dniTitular);
 
@@ -269,8 +277,8 @@ export const getClientsInsights = async (): Promise<ClientsInsights> => {
         if (dniCony) conyugueSet.add(dniCony);
     });
 
-    const duplicateDnis = Array.from(countByDni.entries())
-        .filter(([, count]) => count > 1)
+    const duplicateDnis = Array.from(appearancesByDni.entries())
+        .filter(([, appearances]) => appearances.size > 1)
         .map(([dni]) => dni);
 
     const duplicateSet = new Set(duplicateDnis);
