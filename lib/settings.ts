@@ -14,11 +14,6 @@ const defaultSettings: Settings = {
     },
 };
 
-const defaultPlans: Plan[] = [
-    { id: "1", nombre: "Plan Contado", semanas: 0, tasaPorcentaje: 0, activo: true, orden: 1 },
-    { id: "2", nombre: "12 Semanas", semanas: 12, tasaPorcentaje: 25, activo: true, orden: 2 },
-    { id: "3", nombre: "16 Semanas", semanas: 16, tasaPorcentaje: 40, activo: true, orden: 3, badge: "Promoción" },
-];
 
 const rowToSettings = (row: Record<string, unknown>): Settings => ({
     redondeoTotal: (row.redondeo_total as 0 | 2) ?? defaultSettings.redondeoTotal,
