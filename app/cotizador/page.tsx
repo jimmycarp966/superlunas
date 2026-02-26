@@ -67,9 +67,18 @@ interface ColProps {
     plans: any[];
     settings: any;
     onFicha: (calc: any & { selectedPlanId?: string }) => void;
+    mode?: "single" | "cart";
 }
 
-function CotizadorCol({ products, plans, settings, onFicha }: ColProps) {
+interface CartItem {
+    codigo: string;
+    nombre: string;
+    precio: number;
+    stock: number;
+    qty: number;
+}
+
+function CotizadorCol({ products, plans, settings, onFicha, mode = "single" }: ColProps) {
     const [search, setSearch] = useState("");
     const [product, setProduct] = useState<any | null>(null);
     const [qty, setQty] = useState(1);
@@ -77,6 +86,7 @@ function CotizadorCol({ products, plans, settings, onFicha }: ColProps) {
     const [copied, setCopied] = useState(false);
     const [primeraCuotaMap, setPrimeraCuotaMap] = useState<Record<string, boolean>>({});
     const [selectedPlanId, setSelectedPlanId] = useState("");
+    const [cartItems, setCartItems] = useState<CartItem[]>([]);
 
     useEffect(() => {
         if (!product) return;
@@ -93,6 +103,24 @@ function CotizadorCol({ products, plans, settings, onFicha }: ColProps) {
             setProduct(updated);
         }
     }, [products, product]);
+
+    useEffect(() => {
+        if (mode !== "cart") return;
+        setCartItems((prev) =>
+            prev.map((item) => {
+                const updated = products.find((p) => p.codigo === item.codigo);
+                if (!updated) return item;
+                const updatedPrecio = Number(updated.precio);
+                const updatedStock = Number(updated.stock);
+                return {
+                    ...item,
+                    nombre: String(updated.nombre ?? item.nombre),
+                    precio: Number.isFinite(updatedPrecio) ? updatedPrecio : item.precio,
+                    stock: Number.isFinite(updatedStock) ? updatedStock : item.stock,
+                };
+            })
+        );
+    }, [products, mode]);
 
     useEffect(() => {
         const validIds = new Set(plans.map((p: any) => String(p.id)));
@@ -123,29 +151,67 @@ function CotizadorCol({ products, plans, settings, onFicha }: ColProps) {
     }, [search, products]);
 
     const calc = useMemo(() => {
-        const subtotal = (product?.precio || 0) * qty;
-        const itemsText = product
-            ? (qty > 1 ? `${qty}x ` : "") + `[${product.codigo}] ${product.nombre}`
-            : "";
+        const subtotal = mode === "cart"
+            ? cartItems.reduce((acc, item) => acc + item.precio * item.qty, 0)
+            : (Number(product?.precio) || 0) * qty;
+        const itemsText = mode === "cart"
+            ? cartItems.map((item) => `${item.qty}x [${item.codigo}] ${item.nombre}`).join("\n")
+            : product
+                ? (qty > 1 ? `${qty}x ` : "") + `[${product.codigo}] ${product.nombre}`
+                : "";
         return {
             subtotal,
             anticipo,
             planStats: calcPlanStats(subtotal, anticipo, plans, settings, primeraCuotaMap),
             itemsText,
         };
-    }, [product, qty, anticipo, plans, settings, primeraCuotaMap]);
+    }, [mode, cartItems, product, qty, anticipo, plans, settings, primeraCuotaMap]);
 
     const handleLimpiar = () => {
         setProduct(null);
         setQty(1);
         setAnticipo(0);
         setSearch("");
+        if (mode === "cart") setCartItems([]);
         setPrimeraCuotaMap({});
         setSelectedPlanId(plans[0] ? String(plans[0].id) : "");
     };
 
     const handleStock = () => {
         if (product) alert(`Stock de "${product.nombre}": ${product.stock} unidades`);
+    };
+
+    const handleAgregar = () => {
+        if (!product) return;
+        const codigo = String(product.codigo ?? "").trim();
+        if (!codigo) return;
+
+        const nombre = String(product.nombre ?? "");
+        const precio = Number(product.precio) || 0;
+        const stock = Number(product.stock) || 0;
+
+        setCartItems((prev) => {
+            const existingIndex = prev.findIndex((item) => item.codigo === codigo);
+            if (existingIndex === -1) {
+                return [...prev, { codigo, nombre, precio, stock, qty }];
+            }
+
+            return prev.map((item, index) =>
+                index === existingIndex
+                    ? {
+                        ...item,
+                        qty: item.qty + qty,
+                        precio,
+                        stock,
+                        nombre,
+                    }
+                    : item
+            );
+        });
+
+        setProduct(null);
+        setQty(1);
+        setSearch("");
     };
 
     const handleCopyPresupuesto = async () => {
@@ -157,6 +223,11 @@ function CotizadorCol({ products, plans, settings, onFicha }: ColProps) {
             setCopied(false);
         }
     };
+
+    const selectedProductSubtotal = (Number(product?.precio) || 0) * qty;
+    const isCartMode = mode === "cart";
+    const disableActions = isCartMode && calc.subtotal <= 0;
+    const totalUnidadesCarrito = cartItems.reduce((acc, item) => acc + item.qty, 0);
 
     return (
         <div className="bg-[#1a2638] border border-[#2d3b4f] rounded-2xl p-3 sm:p-3.5 flex flex-col gap-2.5 shadow-[0_6px_20px_rgba(0,0,0,0.35)]">
@@ -192,10 +263,11 @@ function CotizadorCol({ products, plans, settings, onFicha }: ColProps) {
                     Limpiar
                 </button>
                 <button
-                    onClick={handleStock}
-                    className="bg-[#58d64a] hover:bg-[#4ec342] text-white font-black py-2 rounded-md text-[12px] tracking-wide uppercase"
+                    onClick={isCartMode ? handleAgregar : handleStock}
+                    disabled={isCartMode && !product}
+                    className="bg-[#58d64a] hover:bg-[#4ec342] disabled:opacity-50 disabled:cursor-not-allowed text-white font-black py-2 rounded-md text-[12px] tracking-wide uppercase"
                 >
-                    Stock
+                    {isCartMode ? "Agregar" : "Stock"}
                 </button>
             </div>
 
@@ -232,6 +304,7 @@ function CotizadorCol({ products, plans, settings, onFicha }: ColProps) {
             <div className="grid grid-cols-2 gap-2">
                 <button
                     onClick={() => {
+                        if (disableActions) return;
                         const selectedFromCuota = calc.planStats.find((p: any) => Boolean(p.primeraCuotaPaga));
                         const selectedFromState = calc.planStats.find((p: any) => String(p.id) === String(selectedPlanId));
                         const fallback = calc.planStats[0];
@@ -243,13 +316,15 @@ function CotizadorCol({ products, plans, settings, onFicha }: ColProps) {
                             selectedPlanId: resolvedPlanId,
                         });
                     }}
-                    className="bg-[#47d98a] hover:bg-[#3fc57c] text-white font-black py-2 rounded-md text-[12px] uppercase tracking-wide flex items-center justify-center gap-1.5"
+                    disabled={disableActions}
+                    className="bg-[#47d98a] hover:bg-[#3fc57c] disabled:opacity-50 disabled:cursor-not-allowed text-white font-black py-2 rounded-md text-[12px] uppercase tracking-wide flex items-center justify-center gap-1.5"
                 >
                     <ClipboardList className="w-4 h-4" /> Ficha
                 </button>
                 <button
                     onClick={handleCopyPresupuesto}
-                    className="bg-[#29b4f0] hover:bg-[#239dd1] text-white font-black py-2 rounded-md text-[12px] uppercase tracking-wide flex items-center justify-center gap-1.5"
+                    disabled={disableActions}
+                    className="bg-[#29b4f0] hover:bg-[#239dd1] disabled:opacity-50 disabled:cursor-not-allowed text-white font-black py-2 rounded-md text-[12px] uppercase tracking-wide flex items-center justify-center gap-1.5"
                 >
                     <ClipboardList className="w-4 h-4" /> Copiar
                 </button>
@@ -261,13 +336,51 @@ function CotizadorCol({ products, plans, settings, onFicha }: ColProps) {
                 </div>
             )}
 
+            {isCartMode && (
+                <div className="bg-[#101827] border border-[#2d3b4f] rounded-lg px-3 py-2.5 flex flex-col gap-2">
+                    <div className="flex items-center justify-between">
+                        <p className="text-white/90 text-xs font-black uppercase tracking-wide">Carrito</p>
+                        <span className="text-[#6de67f] text-[11px] font-black">
+                            {cartItems.length} prod. / {totalUnidadesCarrito} unid.
+                        </span>
+                    </div>
+                    {cartItems.length === 0 ? (
+                        <p className="text-white/50 text-xs">Todavia no agregaste productos.</p>
+                    ) : (
+                        <div className="flex flex-col gap-1.5">
+                            {cartItems.map((item) => (
+                                <div
+                                    key={item.codigo}
+                                    className="bg-[#0f1724] border border-[#2d3b4f] rounded-md px-2.5 py-2 flex items-start justify-between gap-2"
+                                >
+                                    <div className="min-w-0">
+                                        <p className="text-white text-xs font-bold truncate">
+                                            {item.qty}x [{item.codigo}] {item.nombre}
+                                        </p>
+                                        <p className="text-[#ffc64f] text-[11px] font-black">
+                                            $ {formatARS(item.precio * item.qty)}
+                                        </p>
+                                    </div>
+                                    <button
+                                        onClick={() => setCartItems((prev) => prev.filter((p) => p.codigo !== item.codigo))}
+                                        className="text-[10px] uppercase font-black px-2 py-1 rounded bg-[#ef3d2f] hover:bg-[#dc3528] text-white shrink-0"
+                                    >
+                                        Quitar
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+
             {product ? (
                 <div className="bg-[#0f1724] border border-[#f0a12e] rounded-lg px-3 py-2.5">
                     <div className="text-white font-black text-[15px] sm:text-[19px] leading-tight uppercase">
                         [{product.codigo}] {product.nombre}
                     </div>
                     <div className="text-[#ffc64f] font-extrabold text-[30px] sm:text-[40px] leading-none mt-1">
-                        ${formatARS(calc.subtotal)}
+                        ${formatARS(selectedProductSubtotal)}
                     </div>
                     <span
                         className={`inline-block mt-1 text-[11px] px-2 py-[2px] rounded font-black ${
@@ -459,6 +572,7 @@ export default function CotizadorPage() {
                     products={products}
                     plans={plans}
                     settings={settings}
+                    mode="cart"
                     onFicha={(calc) => {
                         setActiveCalc(calc);
                         setShowRegistration(true);

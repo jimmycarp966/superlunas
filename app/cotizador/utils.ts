@@ -71,6 +71,12 @@ const todayStr = (): string => {
 const stripCodes = (text: string): string =>
     text.replace(/\[\w[\w-]*\]\s*/g, "").trim();
 
+const splitItemsLines = (itemsText: string): string[] =>
+    String(itemsText ?? "")
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+
 // ── Formato PRESUPUESTO (botón COPIAR en el cotizador) ────────────────────────
 export const generatePresupuestoText = (
     calc: { subtotal: number; anticipo: number; itemsText: string; planStats: any[] }
@@ -78,9 +84,17 @@ export const generatePresupuestoText = (
     if (calc.subtotal === 0) return "";
 
     const lines: string[] = [];
+    const productLines = splitItemsLines(calc.itemsText);
     lines.push("PRESUPUESTO");
     lines.push("----------------------------------------");
-    lines.push(`* PRODUCTO: ${stripCodes(calc.itemsText)}`);
+    if (productLines.length <= 1) {
+        lines.push(`* PRODUCTO: ${stripCodes(productLines[0] ?? "")}`);
+    } else {
+        lines.push("* PRODUCTOS:");
+        productLines.forEach((line) => {
+            lines.push(`  - ${stripCodes(line)}`);
+        });
+    }
     lines.push("");
     lines.push("OPCIONES DE FINANCIACIÓN:");
     lines.push("");
@@ -126,6 +140,13 @@ export const generateNotaPedidoText = (
 ): string => {
     const sep = "----------------------------";
     const plan = calc.planStats.find(p => p.id === opts.selectedPlanId);
+    const productLines = splitItemsLines(calc.itemsText);
+    const productSection = productLines.length <= 1
+        ? [`>> PRODUCTO : ${productLines[0] ?? ""}`]
+        : [
+            ">> PRODUCTOS :",
+            ...productLines.map((line) => `    - ${line}`),
+        ];
 
     let planLine = "";
     let totalLine = "";
@@ -162,7 +183,7 @@ export const generateNotaPedidoText = (
         `DOM. COM : ${opts.domCom}`,
         `DOM. PAR : ${opts.domPar}`,
         sep,
-        `>> PRODUCTO : ${calc.itemsText}`,
+        ...productSection,
         `    PLAN : ${planLine}`,
         `    TOTAL VENTA (FINAL) : $${totalLine}`,
         ``,
