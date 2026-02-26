@@ -34,9 +34,6 @@ interface FormState {
     observaciones: string;
 }
 
-const FORM_KEY = "lunas_registro_form";
-const VENDOR_KEY = "lunas_vendedor";
-
 const emptyForm = (): FormState => ({
     cliente: "",
     nroCliente: "",
@@ -64,17 +61,6 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
     const [saving, setSaving] = useState(false);
     const [submitError, setSubmitError] = useState("");
     const dropdownRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        try {
-            const raw = localStorage.getItem(FORM_KEY);
-            if (raw) setForm(JSON.parse(raw));
-        } catch { /* ignore */ }
-        try {
-            const v = localStorage.getItem(VENDOR_KEY);
-            if (v) setVendedor(v);
-        } catch { /* ignore */ }
-    }, []);
 
     useEffect(() => {
         fetch("/api/clients")
@@ -126,13 +112,13 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
         }));
     }, [calc, anticipoFinal, form, vendedor, selectedPlanId]);
 
-    useEffect(() => {
-        try { localStorage.setItem(FORM_KEY, JSON.stringify(form)); } catch { /* ignore */ }
-    }, [form]);
-
-    useEffect(() => {
-        try { localStorage.setItem(VENDOR_KEY, vendedor); } catch { /* ignore */ }
-    }, [vendedor]);
+    const resetFichaState = useCallback(() => {
+        setForm(emptyForm());
+        setVendedor("");
+        setClientSearch("");
+        setShowDropdown(false);
+        setSubmitError("");
+    }, []);
 
     useEffect(() => {
         const handler = (e: MouseEvent) => {
@@ -263,6 +249,8 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
         } else {
             window.location.href = waUrl;
         }
+        resetFichaState();
+        onClose();
     };
 
     const matches = filteredClients();

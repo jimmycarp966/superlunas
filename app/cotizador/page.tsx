@@ -619,7 +619,6 @@ export default function CotizadorPage() {
                     products={products}
                     plans={plans}
                     settings={settings}
-                    mode="manual"
                     onFicha={(calc) => {
                         setActiveCalc(calc);
                         setShowRegistration(true);
@@ -639,6 +638,7 @@ export default function CotizadorPage() {
                     products={products}
                     plans={plans}
                     settings={settings}
+                    mode="manual"
                     onFicha={(calc) => {
                         setActiveCalc(calc);
                         setShowRegistration(true);
