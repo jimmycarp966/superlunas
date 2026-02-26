@@ -1160,9 +1160,13 @@ export default function AdminPanel() {
                                                             const key = getClientKey(c);
                                                             const isExpanded = expandedClientKey === key;
                                                             const dniNorm = normalizeDni(String(c.dni || ""));
+                                                            const dniConyNorm = normalizeDni(String(c.dniConyugue || ""));
                                                             const isDuplicate = Boolean(dniNorm && duplicateDniSet.has(dniNorm));
                                                             const hasTitularConyugue = Boolean(dniNorm && titularConyugueSet.has(dniNorm));
-                                                            const hasAlert = isDuplicate || hasTitularConyugue;
+                                                            const isDniConyDuplicate = Boolean(dniConyNorm && duplicateDniSet.has(dniConyNorm));
+                                                            const hasDniConyTitularConyugue = Boolean(dniConyNorm && titularConyugueSet.has(dniConyNorm));
+                                                            const hasDniConyAlert = isDniConyDuplicate || hasDniConyTitularConyugue;
+                                                            const hasAlert = isDuplicate || hasTitularConyugue || hasDniConyAlert;
                                                             const obsValue = String(clientObsDrafts[key] ?? c.observaciones ?? "");
 
                                                             return (
@@ -1187,10 +1191,15 @@ export default function AdminPanel() {
                                                                                         Titular/Conyuge
                                                                                     </span>
                                                                                 )}
+                                                                                {hasDniConyAlert && (
+                                                                                    <span className="text-[10px] uppercase tracking-wide font-bold px-2 py-0.5 rounded-full bg-amber-200/15 text-amber-100 border border-amber-200/35">
+                                                                                        DNI Conyuge repetido
+                                                                                    </span>
+                                                                                )}
                                                                             </div>
                                                                         </td>
                                                                         <td className="px-4 py-3 text-indigo-300 text-xs font-mono">{c.nroCliente || "-"}</td>
-                                                                        <td className="px-4 py-3 text-neutral-300 text-xs font-mono">{c.dni || "-"}</td>
+                                                                        <td className={`px-4 py-3 text-xs font-mono ${isDuplicate ? "text-amber-200 font-semibold" : "text-neutral-300"}`}>{c.dni || "-"}</td>
                                                                         <td className="px-4 py-3 text-neutral-300">{c.telefono || "-"}</td>
                                                                         <td className="px-4 py-3 text-neutral-300">{c.localidad || "-"}</td>
                                                                         <td className="px-4 py-3 text-neutral-400">{c.zona || "-"}</td>
@@ -1202,27 +1211,61 @@ export default function AdminPanel() {
                                                                     {isExpanded && (
                                                                         <tr className="bg-neutral-900/70 border-b border-neutral-800">
                                                                             <td colSpan={8} className="px-4 py-4">
+                                                                                {(() => {
+                                                                                    const detailItems: Array<{
+                                                                                        label: string;
+                                                                                        value: string;
+                                                                                        repeated?: boolean;
+                                                                                        repeatedLabel?: string;
+                                                                                    }> = [
+                                                                                        { label: "Nombre", value: String(c.nombre || "-") },
+                                                                                        { label: "Nro Cliente", value: String(c.nroCliente || "-") },
+                                                                                        {
+                                                                                            label: "DNI",
+                                                                                            value: String(c.dni || "-"),
+                                                                                            repeated: isDuplicate || hasTitularConyugue,
+                                                                                            repeatedLabel: hasTitularConyugue ? "Titular/Conyuge" : "DNI repetido",
+                                                                                        },
+                                                                                        { label: "Telefono", value: String(c.telefono || "-") },
+                                                                                        { label: "Localidad", value: String(c.localidad || "-") },
+                                                                                        { label: "Zona", value: String(c.zona || "-") },
+                                                                                        { label: "Rubro", value: String(c.rubro || "-") },
+                                                                                        { label: "Dom. Comercial", value: String(c.domCom || "-") },
+                                                                                        { label: "Dom. Particular", value: String(c.domPar || "-") },
+                                                                                        { label: "Conyuge", value: String(c.conyugue || "-") },
+                                                                                        {
+                                                                                            label: "DNI Conyuge",
+                                                                                            value: String(c.dniConyugue || "-"),
+                                                                                            repeated: isDniConyDuplicate || hasDniConyTitularConyugue,
+                                                                                            repeatedLabel: hasDniConyTitularConyugue ? "Titular/Conyuge" : "DNI repetido",
+                                                                                        },
+                                                                                        { label: "Tel. Conyuge", value: String(c.telConyugue || "-") },
+                                                                                    ];
+
+                                                                                    return (
                                                                                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                                                                                    {[
-                                                                                        ["Nombre", c.nombre],
-                                                                                        ["Nro Cliente", c.nroCliente],
-                                                                                        ["DNI", c.dni],
-                                                                                        ["Telefono", c.telefono],
-                                                                                        ["Localidad", c.localidad],
-                                                                                        ["Zona", c.zona],
-                                                                                        ["Rubro", c.rubro],
-                                                                                        ["Dom. Comercial", c.domCom],
-                                                                                        ["Dom. Particular", c.domPar],
-                                                                                        ["Conyuge", c.conyugue],
-                                                                                        ["DNI Conyuge", c.dniConyugue],
-                                                                                        ["Tel. Conyuge", c.telConyugue],
-                                                                                    ].map(([label, value]) => (
-                                                                                        <div key={label} className="bg-neutral-800 rounded-lg px-3 py-2 border border-neutral-700/60">
-                                                                                            <p className="text-neutral-500 text-[10px] uppercase tracking-wide mb-0.5">{label}</p>
-                                                                                            <p className="text-neutral-200 text-xs font-medium break-words">{value || "-"}</p>
+                                                                                    {detailItems.map((item) => (
+                                                                                        <div
+                                                                                            key={item.label}
+                                                                                            className={`rounded-lg px-3 py-2 border ${item.repeated
+                                                                                                ? "bg-amber-500/15 border-amber-300/50"
+                                                                                                : "bg-neutral-800 border-neutral-700/60"
+                                                                                                }`}
+                                                                                        >
+                                                                                            <p className="text-neutral-500 text-[10px] uppercase tracking-wide mb-0.5">{item.label}</p>
+                                                                                            <p className={`text-xs font-medium break-words ${item.repeated ? "text-amber-100" : "text-neutral-200"}`}>
+                                                                                                {item.value}
+                                                                                            </p>
+                                                                                            {item.repeated && (
+                                                                                                <span className="inline-block mt-1 text-[10px] uppercase tracking-wide font-bold px-1.5 py-0.5 rounded bg-amber-300/20 text-amber-200 border border-amber-300/40">
+                                                                                                    {item.repeatedLabel || "Dato repetido"}
+                                                                                                </span>
+                                                                                            )}
                                                                                         </div>
                                                                                     ))}
                                                                                 </div>
+                                                                                    );
+                                                                                })()}
 
                                                                                 <div className="mt-4 pt-4 border-t border-neutral-800">
                                                                                     <label className="text-xs text-neutral-400 block mb-1.5">Observaciones internas (admin)</label>
