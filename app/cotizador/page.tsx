@@ -67,7 +67,7 @@ interface ColProps {
     plans: any[];
     settings: any;
     onFicha: (calc: any & { selectedPlanId?: string }) => void;
-    mode?: "single" | "cart";
+    mode?: "single" | "cart" | "manual";
 }
 
 interface CartItem {
@@ -81,6 +81,8 @@ interface CartItem {
 function CotizadorCol({ products, plans, settings, onFicha, mode = "single" }: ColProps) {
     const [search, setSearch] = useState("");
     const [product, setProduct] = useState<any | null>(null);
+    const [manualDescription, setManualDescription] = useState("");
+    const [manualPrice, setManualPrice] = useState(0);
     const [qty, setQty] = useState(1);
     const [anticipo, setAnticipo] = useState(0);
     const [copied, setCopied] = useState(false);
@@ -151,24 +153,32 @@ function CotizadorCol({ products, plans, settings, onFicha, mode = "single" }: C
     }, [search, products]);
 
     const calc = useMemo(() => {
+        const manualDesc = manualDescription.trim();
+        const manualUnitPrice = Number(manualPrice) || 0;
         const subtotal = mode === "cart"
             ? cartItems.reduce((acc, item) => acc + item.precio * item.qty, 0)
-            : (Number(product?.precio) || 0) * qty;
+            : mode === "manual"
+                ? (manualDesc && manualUnitPrice > 0 ? manualUnitPrice * qty : 0)
+                : (Number(product?.precio) || 0) * qty;
         const itemsText = mode === "cart"
             ? cartItems.map((item) => `${item.qty}x [${item.codigo}] ${item.nombre}`).join("\n")
-            : product
-                ? (qty > 1 ? `${qty}x ` : "") + `[${product.codigo}] ${product.nombre}`
-                : "";
+            : mode === "manual"
+                ? (manualDesc && manualUnitPrice > 0 ? `${qty}x ${manualDesc}` : "")
+                : product
+                    ? (qty > 1 ? `${qty}x ` : "") + `[${product.codigo}] ${product.nombre}`
+                    : "";
         return {
             subtotal,
             anticipo,
             planStats: calcPlanStats(subtotal, anticipo, plans, settings, primeraCuotaMap),
             itemsText,
         };
-    }, [mode, cartItems, product, qty, anticipo, plans, settings, primeraCuotaMap]);
+    }, [mode, cartItems, manualDescription, manualPrice, product, qty, anticipo, plans, settings, primeraCuotaMap]);
 
     const handleLimpiar = () => {
         setProduct(null);
+        setManualDescription("");
+        setManualPrice(0);
         setQty(1);
         setAnticipo(0);
         setSearch("");
@@ -226,50 +236,78 @@ function CotizadorCol({ products, plans, settings, onFicha, mode = "single" }: C
 
     const selectedProductSubtotal = (Number(product?.precio) || 0) * qty;
     const isCartMode = mode === "cart";
-    const disableActions = isCartMode && calc.subtotal <= 0;
+    const isManualMode = mode === "manual";
+    const disableActions = (isCartMode || isManualMode) && calc.subtotal <= 0;
     const totalUnidadesCarrito = cartItems.reduce((acc, item) => acc + item.qty, 0);
 
     return (
         <div className="bg-[#1a2638] border border-[#2d3b4f] rounded-2xl p-3 sm:p-3.5 flex flex-col gap-2.5 shadow-[0_6px_20px_rgba(0,0,0,0.35)]">
-            <input
-                type="text"
-                placeholder="Codigo"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full bg-[#0d1522] border border-[#f0a12e] rounded-lg px-3 py-2 text-white text-sm sm:text-base font-bold placeholder-gray-500 focus:outline-none"
-            />
+            {isManualMode ? (
+                <>
+                    <input
+                        type="text"
+                        placeholder="Descripcion"
+                        value={manualDescription}
+                        onChange={(e) => setManualDescription(e.target.value)}
+                        className="w-full bg-[#0d1522] border border-[#f0a12e] rounded-lg px-3 py-2 text-white text-sm sm:text-base font-bold placeholder-gray-500 focus:outline-none"
+                    />
+                    <input
+                        type="number"
+                        placeholder="Precio"
+                        value={manualPrice || ""}
+                        onChange={(e) => setManualPrice(Math.max(0, parseInt(e.target.value) || 0))}
+                        className="w-full bg-[#0f1a2a] border border-[#2d3b4f] text-white font-bold rounded-lg px-3 py-2.5 text-sm focus:outline-none"
+                    />
+                    <button
+                        onClick={handleLimpiar}
+                        className="w-full bg-[#ef3d2f] hover:bg-[#dc3528] text-white font-black py-2 rounded-md text-[12px] tracking-wide uppercase"
+                    >
+                        Limpiar
+                    </button>
+                </>
+            ) : (
+                <>
+                    <input
+                        type="text"
+                        placeholder="Codigo"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        className="w-full bg-[#0d1522] border border-[#f0a12e] rounded-lg px-3 py-2 text-white text-sm sm:text-base font-bold placeholder-gray-500 focus:outline-none"
+                    />
 
-            <select
-                className="w-full bg-[#0f1a2a] border border-[#2d3b4f] text-white font-bold rounded-lg px-3 py-2.5 text-sm focus:outline-none cursor-pointer"
-                value={product?.codigo || ""}
-                onChange={(e) => {
-                    const p = products.find((prod) => prod.codigo === e.target.value);
-                    setProduct(p || null);
-                }}
-            >
-                <option value="">Resultados...</option>
-                {filtered.map((p) => (
-                    <option key={p.codigo} value={p.codigo}>
-                        [{p.codigo}] {p.nombre}
-                    </option>
-                ))}
-            </select>
+                    <select
+                        className="w-full bg-[#0f1a2a] border border-[#2d3b4f] text-white font-bold rounded-lg px-3 py-2.5 text-sm focus:outline-none cursor-pointer"
+                        value={product?.codigo || ""}
+                        onChange={(e) => {
+                            const p = products.find((prod) => prod.codigo === e.target.value);
+                            setProduct(p || null);
+                        }}
+                    >
+                        <option value="">Resultados...</option>
+                        {filtered.map((p) => (
+                            <option key={p.codigo} value={p.codigo}>
+                                [{p.codigo}] {p.nombre}
+                            </option>
+                        ))}
+                    </select>
 
-            <div className="grid grid-cols-2 gap-2">
-                <button
-                    onClick={handleLimpiar}
-                    className="bg-[#ef3d2f] hover:bg-[#dc3528] text-white font-black py-2 rounded-md text-[12px] tracking-wide uppercase"
-                >
-                    Limpiar
-                </button>
-                <button
-                    onClick={isCartMode ? handleAgregar : handleStock}
-                    disabled={isCartMode && !product}
-                    className="bg-[#58d64a] hover:bg-[#4ec342] disabled:opacity-50 disabled:cursor-not-allowed text-white font-black py-2 rounded-md text-[12px] tracking-wide uppercase"
-                >
-                    {isCartMode ? "Agregar" : "Stock"}
-                </button>
-            </div>
+                    <div className="grid grid-cols-2 gap-2">
+                        <button
+                            onClick={handleLimpiar}
+                            className="bg-[#ef3d2f] hover:bg-[#dc3528] text-white font-black py-2 rounded-md text-[12px] tracking-wide uppercase"
+                        >
+                            Limpiar
+                        </button>
+                        <button
+                            onClick={isCartMode ? handleAgregar : handleStock}
+                            disabled={isCartMode && !product}
+                            className="bg-[#58d64a] hover:bg-[#4ec342] disabled:opacity-50 disabled:cursor-not-allowed text-white font-black py-2 rounded-md text-[12px] tracking-wide uppercase"
+                        >
+                            {isCartMode ? "Agregar" : "Stock"}
+                        </button>
+                    </div>
+                </>
+            )}
 
             <div className="flex items-center gap-2 bg-[#0f1a2a] border border-[#2d3b4f] rounded-md px-2.5 py-1.5">
                 <span className="text-white/85 font-bold text-sm">Cantidad:</span>
@@ -374,7 +412,25 @@ function CotizadorCol({ products, plans, settings, onFicha, mode = "single" }: C
                 </div>
             )}
 
-            {product ? (
+            {isManualMode ? (
+                manualDescription.trim() || manualPrice > 0 ? (
+                    <div className="bg-[#0f1724] border border-[#f0a12e] rounded-lg px-3 py-2.5">
+                        <div className="text-white font-black text-[15px] sm:text-[19px] leading-tight uppercase">
+                            {manualDescription.trim() || "Sin descripcion"}
+                        </div>
+                        <div className="text-[#ffc64f] font-extrabold text-[30px] sm:text-[40px] leading-none mt-1">
+                            ${formatARS(calc.subtotal)}
+                        </div>
+                        <span className="inline-block mt-1 text-[11px] px-2 py-[2px] rounded font-black bg-[#2b8f40] text-white">
+                            Precio unitario: ${formatARS(manualPrice)}
+                        </span>
+                    </div>
+                ) : (
+                    <div className="bg-[#101827] border border-[#2d3b4f] rounded-lg px-3 py-4 text-center text-white/45 font-semibold text-sm">
+                        Carga descripcion y precio
+                    </div>
+                )
+            ) : product ? (
                 <div className="bg-[#0f1724] border border-[#f0a12e] rounded-lg px-3 py-2.5">
                     <div className="text-white font-black text-[15px] sm:text-[19px] leading-tight uppercase">
                         [{product.codigo}] {product.nombre}
@@ -563,6 +619,7 @@ export default function CotizadorPage() {
                     products={products}
                     plans={plans}
                     settings={settings}
+                    mode="manual"
                     onFicha={(calc) => {
                         setActiveCalc(calc);
                         setShowRegistration(true);
