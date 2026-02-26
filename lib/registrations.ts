@@ -103,7 +103,6 @@ const clientToRow = (c: ClientRecord) => ({
     tel_conyugue: c.telConyugue,
     zona: c.zona,
     nro_cliente: c.nroCliente,
-    observaciones: c.observaciones ?? "",
 });
 
 export const getRegistrations = async (): Promise<Registration[]> => {
@@ -129,16 +128,11 @@ export const addOrUpdateClient = async (client: ClientRecord): Promise<void> => 
     const existingByName = existingClients.find(c => c.nombre.toUpperCase().trim() === nombre);
     const existing = existingByDni ?? existingByName;
 
-    const mergedObservaciones = normalizedInput.observaciones?.trim()
-        ? normalizedInput.observaciones.trim()
-        : (existing?.observaciones ?? "");
-
     if (existing) {
         const merged: ClientRecord = {
             ...existing,
             ...normalizedInput,
             nombre: existing.nombre,
-            observaciones: mergedObservaciones,
         };
 
         const { error: updateError } = await supabase
@@ -150,10 +144,7 @@ export const addOrUpdateClient = async (client: ClientRecord): Promise<void> => 
         return;
     }
 
-    const toInsert: ClientRecord = {
-        ...normalizedInput,
-        observaciones: mergedObservaciones,
-    };
+    const toInsert: ClientRecord = { ...normalizedInput };
     const { error: insertError } = await supabase
         .from("clients")
         .upsert(clientToRow(toInsert), { onConflict: "nombre" });
@@ -183,7 +174,6 @@ export const addRegistration = async (data: Omit<Registration, "id" | "fecha">):
             telConyugue: data.telConyugue,
             zona: data.zona,
             nroCliente: data.nroCliente,
-            observaciones: data.observaciones,
         });
     }
 
@@ -200,7 +190,48 @@ export const getClients = async (): Promise<ClientRecord[]> => {
         return [];
     }
 
-    return (data as Record<string, unknown>[]).map(rowToClient);
+    const clients = (data as Record<string, unknown>[]).map(rowToClient);
+
+    const { data: registrationsData, error: registrationsError } = await supabase
+        .from("registrations")
+        .select("cliente, dni, observaciones, fecha")
+        .order("fecha", { ascending: false });
+
+    if (registrationsError || !registrationsData) {
+        return clients;
+    }
+
+    const obsByDni = new Map<string, string>();
+    const obsByName = new Map<string, string>();
+
+    (registrationsData as Record<string, unknown>[]).forEach(row => {
+        const observaciones = String(row.observaciones ?? "").trim();
+        if (!observaciones) return;
+
+        const dniNorm = normalizeDni(String(row.dni ?? ""));
+        if (dniNorm && !obsByDni.has(dniNorm)) {
+            obsByDni.set(dniNorm, observaciones);
+        }
+
+        const nombreNorm = String(row.cliente ?? "").toUpperCase().trim();
+        if (nombreNorm && !obsByName.has(nombreNorm)) {
+            obsByName.set(nombreNorm, observaciones);
+        }
+    });
+
+    return clients.map(client => {
+        const dniNorm = normalizeDni(client.dni);
+        const nombreNorm = client.nombre.toUpperCase().trim();
+        const observaciones = (dniNorm ? obsByDni.get(dniNorm) : undefined)
+            ?? obsByName.get(nombreNorm)
+            ?? client.observaciones
+            ?? "";
+
+        return {
+            ...client,
+            observaciones,
+        };
+    });
 };
 
 export const updateClientObservaciones = async (params: {
@@ -224,18 +255,40 @@ export const updateClientObservaciones = async (params: {
         throw new Error("Cliente no encontrado para actualizar observaciones.");
     }
 
+    const { data: registrationsData, error: registrationsError } = await supabase
+        .from("registrations")
+        .select("id, cliente, dni, fecha")
+        .order("fecha", { ascending: false });
+
+    if (registrationsError || !registrationsData) {
+        const msg = registrationsError?.message ?? "Sin datos";
+        throw new Error(`No se pudo leer registrations para observaciones: ${msg}`);
+    }
+
+    const targetRegistration = (registrationsData as Record<string, unknown>[]).find(row => {
+        const rowDniNorm = normalizeDni(String(row.dni ?? ""));
+        if (dniNorm && rowDniNorm === dniNorm) return true;
+        const rowNombreNorm = String(row.cliente ?? "").toUpperCase().trim();
+        return !!nombreNorm && rowNombreNorm === nombreNorm;
+    });
+
+    if (!targetRegistration?.id) {
+        throw new Error("No se encontro un registro para actualizar observaciones.");
+    }
+
+    const observaciones = String(params.observaciones ?? "").trim();
     const updated: ClientRecord = {
         ...target,
-        observaciones: String(params.observaciones ?? "").trim(),
+        observaciones,
     };
 
     const { error } = await supabase
-        .from("clients")
-        .update({ observaciones: updated.observaciones })
-        .eq("nombre", target.nombre);
+        .from("registrations")
+        .update({ observaciones })
+        .eq("id", String(targetRegistration.id));
 
     if (error) {
-        throw new Error(`No se pudo actualizar observaciones de client: ${error.message}`);
+        throw new Error(`No se pudo actualizar observaciones: ${error.message}`);
     }
 
     return updated;
@@ -331,7 +384,6 @@ export const loadClientsFromBuffer = async (buffer: Buffer): Promise<number> => 
             telConyugue: String(row["TEL CONYUGUE"] || ""),
             zona: String(row["ZONA"] || ""),
             nroCliente: String(row["NÂ° CLIENTE"] || row["NÂº CLIENTE"] || ""),
-            observaciones: String(row["OBSERVACIONES"] || ""),
         });
     });
 
