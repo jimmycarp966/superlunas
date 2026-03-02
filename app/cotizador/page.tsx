@@ -378,7 +378,7 @@ function CotizadorCol({ products, plans, settings, onFicha, mode = "single" }: C
                 className="w-full bg-[#f3e8c8] text-[#2b2b2b] font-bold px-3 py-2 rounded-md border border-[#e7d7ae] focus:outline-none text-sm"
             />
 
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
                 <button
                     onClick={() => {
                         if (disableActions) return;
@@ -404,13 +404,6 @@ function CotizadorCol({ products, plans, settings, onFicha, mode = "single" }: C
                     className="bg-[#29b4f0] hover:bg-[#239dd1] disabled:opacity-50 disabled:cursor-not-allowed text-white font-black py-2 rounded-md text-[12px] uppercase tracking-wide flex items-center justify-center gap-1.5"
                 >
                     <ClipboardList className="w-4 h-4" /> Copiar
-                </button>
-                <button
-                    onClick={handleSendWhatsapp}
-                    disabled={disableActions}
-                    className="bg-[#25D366] hover:bg-[#1fb95a] disabled:opacity-50 disabled:cursor-not-allowed text-white font-black py-2 rounded-md text-[12px] uppercase tracking-wide flex items-center justify-center gap-1.5"
-                >
-                    WhatsApp
                 </button>
             </div>
 
