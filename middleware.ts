@@ -1,54 +1,60 @@
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
-import { verifyAuth } from './lib/auth';
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import { verifyAuth } from "./lib/auth";
+import { canAccessPath, getDefaultRouteForRole } from "./lib/roles";
+
+const PROTECTED_PREFIXES = [
+    "/cotizador",
+    "/config/panel",
+    "/creditos",
+    "/cobranzas",
+    "/tesoreria",
+    "/reparto",
+    "/almacen",
+    "/dashboard",
+];
+
+const isProtectedPath = (pathname: string): boolean => {
+    return PROTECTED_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+};
 
 export async function middleware(req: NextRequest) {
-    // Extraemos token de las cookies
-    const token = req.cookies.get('lunas_confort_session')?.value;
+    const token = req.cookies.get("lunas_confort_session")?.value;
     const url = req.nextUrl.clone();
+    const pathname = url.pathname;
 
-    // Rutas protegidas a revisar
-    const isVendorRoute = url.pathname.startsWith('/cotizador');
-    const isAdminRoute = url.pathname.startsWith('/config/panel');
-
-    if (isVendorRoute || isAdminRoute) {
+    if (isProtectedPath(pathname)) {
         if (!token) {
-            url.pathname = isAdminRoute ? '/config' : '/';
+            url.pathname = pathname.startsWith("/config/panel") ? "/config" : "/";
             return NextResponse.redirect(url);
         }
 
         try {
             const payload = await verifyAuth(token);
-
-            // Cheques de autorizacion
-            if (isAdminRoute && payload.role !== 'admin') {
-                url.pathname = '/';
+            if (!canAccessPath(pathname, payload.role)) {
+                url.pathname = getDefaultRouteForRole(payload.role);
                 return NextResponse.redirect(url);
             }
-
-            // Si todo va bien continuamos
             return NextResponse.next();
-        } catch (err) {
-            url.pathname = isAdminRoute ? '/config' : '/';
+        } catch {
+            url.pathname = pathname.startsWith("/config/panel") ? "/config" : "/";
             return NextResponse.redirect(url);
         }
     }
 
-    // Redirigir a usuarios logeados que intentan acceder al login
-    if (token && (url.pathname === '/' || url.pathname === '/config')) {
+    if (token && (pathname === "/" || pathname === "/config")) {
         try {
             const payload = await verifyAuth(token);
-            url.pathname = payload.role === 'admin' ? '/config/panel' : '/cotizador';
+            url.pathname = getDefaultRouteForRole(payload.role);
             return NextResponse.redirect(url);
-        } catch (e) {
-            // Token expirado o invalido, seguimos normal para que vea el login
+        } catch {
+            // Token expirado o invalido: se muestra login.
         }
     }
 
     return NextResponse.next();
 }
 
-// Configurar el matcher de middleware para no bloquear rutas publicas y assets
 export const config = {
-    matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
+    matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
 };

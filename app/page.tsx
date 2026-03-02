@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
+    const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
@@ -15,35 +16,27 @@ export default function LoginPage() {
         setError("");
 
         try {
-            // Intentar como vendedor primero
-            let res = await fetch("/api/auth/login", {
+            const res = await fetch("/api/auth/login", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ password, role: "vendor" }),
+                body: JSON.stringify({
+                    username: username.trim().toLowerCase(),
+                    password,
+                }),
             });
 
-            if (res.ok) {
-                router.push("/cotizador");
-                router.refresh();
+            if (!res.ok) {
+                const data = await res.json();
+                setError(data.error || "Clave incorrecta");
                 return;
             }
 
-            // Intentar como admin
-            res = await fetch("/api/auth/login", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ password, role: "admin" }),
-            });
-
-            if (res.ok) {
-                router.push("/config/panel");
-                router.refresh();
-                return;
-            }
-
-            setError("Clave incorrecta");
+            const data = await res.json();
+            const redirectTo = String(data.redirectTo || "/cotizador");
+            router.push(redirectTo);
+            router.refresh();
         } catch {
-            setError("Fallo la conexión con el servidor");
+            setError("Fallo la conexion con el servidor");
         } finally {
             setLoading(false);
         }
@@ -51,34 +44,40 @@ export default function LoginPage() {
 
     return (
         <main className="min-h-screen bg-black flex items-center justify-center p-3 sm:p-4">
-            {/* Tarjeta de login */}
             <div className="w-full max-w-sm bg-[#0d0d1a] rounded-2xl shadow-2xl border border-[#2a2a4a] overflow-hidden">
-                {/* Cabecera con logo */}
                 <div className="px-5 sm:px-6 pt-7 sm:pt-8 pb-5 sm:pb-6 text-center border-b border-[#2a2a4a]">
                     <div className="text-center mb-3">
-                        <h1 className="text-[26px] sm:text-3xl font-extrabold text-white tracking-widest uppercase" style={{ WebkitTextStroke: '1px #f97316' }}>
+                        <h1 className="text-[26px] sm:text-3xl font-extrabold text-white tracking-widest uppercase" style={{ WebkitTextStroke: "1px #f97316" }}>
                             <span className="text-yellow-400 text-[42px] sm:text-5xl inline-block -mr-2">C</span>
                             <span className="text-red-500">L</span>UNA&apos;S
                             <br />
                             <span className="text-red-500">C</span>ONFORT
                         </h1>
-                        <p className="text-red-500 font-bold text-xs uppercase tracking-widest mt-1">15 años juntos</p>
+                        <p className="text-red-500 font-bold text-xs uppercase tracking-widest mt-1">15 anos juntos</p>
                         <p className="text-red-600 font-bold text-[10px] uppercase tracking-wider">Todo para su hogar y comercio</p>
                     </div>
                 </div>
 
-                {/* Formulario */}
                 <form onSubmit={handleLogin} className="px-5 sm:px-6 py-7 sm:py-8 space-y-5">
                     <h2 className="text-white font-bold text-xl text-center tracking-wider uppercase">
                         Acceso Sistema
                     </h2>
 
                     <input
+                        type="text"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        placeholder="Usuario"
+                        autoComplete="username"
+                        className="block w-full px-4 py-3 bg-[#1a1a2e] border border-[#2a2a4a] rounded-xl text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-colors text-center"
+                    />
+
+                    <input
                         type="password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        placeholder="Ingresa tu clave..."
-                        autoFocus
+                        placeholder="Clave"
+                        autoComplete="current-password"
                         className="block w-full px-4 py-3 bg-[#1a1a2e] border border-[#2a2a4a] rounded-xl text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-colors text-center"
                     />
 
@@ -99,13 +98,12 @@ export default function LoginPage() {
                                 Ingresando...
                             </span>
                         ) : (
-                            "ENTRAR AL SISTEMA"
+                            "Entrar al Sistema"
                         )}
                     </button>
                 </form>
             </div>
 
-            {/* Watermark esquina inferior derecha */}
             <div className="fixed bottom-4 right-4 opacity-20 pointer-events-none select-none">
                 <div className="text-center">
                     <span className="text-white font-extrabold text-sm tracking-widest uppercase">

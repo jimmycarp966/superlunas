@@ -3,11 +3,25 @@ const SHELL_ASSETS = [
   "/",
   "/cotizador",
   "/config",
+  "/creditos",
+  "/cobranzas",
+  "/tesoreria",
+  "/almacen/productos",
+  "/catalogo",
   "/manifest.webmanifest",
   "/icons/icon-192.png",
   "/icons/icon-512.png",
 ];
-const NAVIGATION_ALLOWLIST = new Set(["/", "/cotizador", "/config"]);
+const NAVIGATION_ALLOWLIST = new Set([
+  "/",
+  "/cotizador",
+  "/config",
+  "/creditos",
+  "/cobranzas",
+  "/tesoreria",
+  "/almacen/productos",
+  "/catalogo",
+]);
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

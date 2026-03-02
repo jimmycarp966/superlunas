@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ShieldCheck, Settings } from "lucide-react";
 
 export default function AdminLoginPage() {
+    const [username, setUsername] = useState("admin");
     const [password, setPassword] = useState("");
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
@@ -19,7 +20,11 @@ export default function AdminLoginPage() {
             const res = await fetch("/api/auth/login", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ password, role: "admin" }),
+                body: JSON.stringify({
+                    username: username.trim().toLowerCase(),
+                    password,
+                    role: "admin",
+                }),
             });
 
             if (res.ok) {
@@ -29,8 +34,8 @@ export default function AdminLoginPage() {
                 const data = await res.json();
                 setError(data.error || "Password incorrecta");
             }
-        } catch (err) {
-            setError("Fallo la conexión con el servidor");
+        } catch {
+            setError("Fallo la conexion con el servidor");
         } finally {
             setLoading(false);
         }
@@ -44,10 +49,10 @@ export default function AdminLoginPage() {
                         <Settings className="w-6 h-6" />
                     </div>
                     <h1 className="text-2xl font-bold tracking-tight text-white mb-2">
-                        Administración
+                        Administracion
                     </h1>
                     <p className="text-neutral-400 text-sm">
-                        Panel de Configuración Lunas Confort
+                        Panel de Configuracion Lunas Confort
                     </p>
                 </div>
 
@@ -55,10 +60,28 @@ export default function AdminLoginPage() {
                     <div className="space-y-4">
                         <div>
                             <label
+                                htmlFor="username"
+                                className="block text-sm font-medium text-neutral-300 mb-1.5"
+                            >
+                                Usuario
+                            </label>
+                            <input
+                                id="username"
+                                type="text"
+                                value={username}
+                                onChange={(e) => setUsername(e.target.value)}
+                                className="block w-full px-4 py-3 bg-neutral-900 border border-neutral-700 rounded-xl text-neutral-100 placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-colors"
+                                placeholder="Ingrese usuario"
+                                autoComplete="username"
+                            />
+                        </div>
+
+                        <div>
+                            <label
                                 htmlFor="password"
                                 className="block text-sm font-medium text-neutral-300 mb-1.5"
                             >
-                                Contraseña Admin
+                                Contrasena Admin
                             </label>
                             <div className="relative">
                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -70,7 +93,8 @@ export default function AdminLoginPage() {
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
                                     className="block w-full pl-10 px-4 py-3 bg-neutral-900 border border-neutral-700 rounded-xl text-neutral-100 placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-colors"
-                                    placeholder="Ingrese contraseña de administrador"
+                                    placeholder="Ingrese contrasena de administrador"
+                                    autoComplete="current-password"
                                     autoFocus
                                 />
                             </div>

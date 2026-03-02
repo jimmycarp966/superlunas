@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentCatalog } from "@/lib/sourceLoader";
 import { verifyAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
+import { hasSomeRole } from "@/lib/roles";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +12,9 @@ export async function POST(request: NextRequest) {
         const token = request.cookies.get("lunas_confort_session")?.value;
         if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         const auth = await verifyAuth(token);
-        if (auth.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        if (!hasSomeRole(auth, ["admin", "gerente"])) {
+            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        }
 
         const catalog = await getCurrentCatalog({ forceRefresh: true });
 
@@ -29,7 +32,9 @@ export async function DELETE(request: NextRequest) {
         const token = request.cookies.get("lunas_confort_session")?.value;
         if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         const auth = await verifyAuth(token);
-        if (auth.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        if (!hasSomeRole(auth, ["admin", "gerente"])) {
+            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        }
 
         await supabase.from("products").delete().neq("codigo", "");
         return NextResponse.json({ success: true });
@@ -44,7 +49,9 @@ export async function GET(request: NextRequest) {
         const token = request.cookies.get("lunas_confort_session")?.value;
         if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         const auth = await verifyAuth(token);
-        if (auth.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        if (!hasSomeRole(auth, ["admin", "gerente", "contador"])) {
+            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        }
 
         const { count, error } = await supabase
             .from("products")

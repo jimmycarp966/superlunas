@@ -178,6 +178,24 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
         setShowDropdown(value.length >= 2);
     };
 
+    const getMissingRequiredFields = useCallback((): string[] => {
+        const missing: string[] = [];
+        if (!vendedor.trim()) missing.push("Vendedor");
+        if (!form.cliente.trim()) missing.push("Cliente");
+        if (!form.dni.trim()) missing.push("DNI");
+        if (!form.telefono.trim()) missing.push("Telefono");
+        if (!form.localidad.trim()) missing.push("Localidad");
+        if (!form.zona.trim()) missing.push("Zona");
+        if (!form.rubro.trim()) missing.push("Rubro");
+        if (!form.domCom.trim()) missing.push("Dom. Comercial");
+        if (!form.domPar.trim()) missing.push("Dom. Particular");
+        if (!form.conyugue.trim()) missing.push("Conyuge");
+        if (!form.dniConyugue.trim()) missing.push("DNI conyuge");
+        if (!form.telConyugue.trim()) missing.push("Tel. conyuge");
+        if (!String(selectedPlanId || "").trim()) missing.push("Plan de pago");
+        return missing;
+    }, [vendedor, form, selectedPlanId]);
+
     const buildRegistrationBody = useCallback(() => {
         const planText = selectedPlan ? planToText(selectedPlan) : "";
         const totalText = selectedPlan
@@ -207,8 +225,9 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
     }, [selectedPlan, vendedor, form, calc.itemsText, anticipoFinal]);
 
     const saveRegistration = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
-        if (!form.cliente.trim()) {
-            return { success: false, error: "Completá el cliente antes de enviar." };
+        const missing = getMissingRequiredFields();
+        if (missing.length > 0) {
+            return { success: false, error: `Completa los campos obligatorios: ${missing.join(", ")}.` };
         }
 
         setSaving(true);
@@ -230,7 +249,7 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
         } finally {
             setSaving(false);
         }
-    }, [form.cliente, buildRegistrationBody]);
+    }, [getMissingRequiredFields, buildRegistrationBody]);
 
     const handleWhatsAppSend = async () => {
         const waUrl = `https://wa.me/?text=${encodeURIComponent(fichaText)}`;
@@ -254,8 +273,10 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
     };
 
     const matches = filteredClients();
+    const missingRequiredFields = getMissingRequiredFields();
+    const hasMissingRequiredFields = missingRequiredFields.length > 0;
 
-    // ── shared input style ──
+    // shared input style
     const inp = "w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-indigo-500";
 
     return (
@@ -266,7 +287,7 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
                 <div className="px-4 sm:px-6 py-4 bg-neutral-800 flex items-center justify-between border-b border-neutral-700 shrink-0">
                     <div className="flex items-center gap-2 text-white font-semibold">
                         <ClipboardList className="w-5 h-5 text-indigo-400" />
-                        Ficha de Registro {colLabel ? `— ${colLabel}` : ""}
+                        Ficha de Registro {colLabel ? `- ${colLabel}` : ""}
                     </div>
                     <button onClick={onClose} className="text-neutral-400 hover:text-white p-1.5 rounded-lg hover:bg-neutral-700 transition">
                         <X className="w-5 h-5" />
@@ -308,10 +329,10 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
                             )}
                         </div>
 
-                        {/* N° Cliente + DNI */}
+                        {/* Nro Cliente + DNI */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
-                                <label className="text-xs text-neutral-500 mb-1 block">N° Cliente</label>
+                                <label className="text-xs text-neutral-500 mb-1 block">Nro Cliente</label>
                                 <input type="text" value={form.nroCliente} onChange={e => setField("nroCliente", e.target.value)} className={inp} />
                             </div>
                             <div>
@@ -320,10 +341,10 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
                             </div>
                         </div>
 
-                        {/* Teléfono + Localidad */}
+                        {/* Telefono + Localidad */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
-                                <label className="text-xs text-neutral-500 mb-1 block">Teléfono</label>
+                                <label className="text-xs text-neutral-500 mb-1 block">Telefono</label>
                                 <input type="text" value={form.telefono} onChange={e => setField("telefono", e.target.value)} className={inp} />
                             </div>
                             <div>
@@ -340,7 +361,7 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
                             </div>
                             <div>
                                 <label className="text-xs text-neutral-500 mb-1 block">Rubro</label>
-                                <input type="text" value={form.rubro} onChange={e => setField("rubro", e.target.value)} placeholder="Despensa, Ferretería..." className={inp} />
+                                <input type="text" value={form.rubro} onChange={e => setField("rubro", e.target.value)} placeholder="Despensa, Ferreteria..." className={inp} />
                             </div>
                         </div>
 
@@ -356,14 +377,14 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
                             </div>
                         </div>
 
-                        {/* Cónyuge */}
+                        {/* Conyuge */}
                         <div className="border-t border-neutral-800 pt-3">
-                            <p className="text-xs text-neutral-500 mb-2 font-medium uppercase tracking-wide">Cónyuge / Co-titular</p>
+                            <p className="text-xs text-neutral-500 mb-2 font-medium uppercase tracking-wide">Conyuge / Co-titular</p>
                             <div className="space-y-2">
-                                <input type="text" value={form.conyugue} onChange={e => setField("conyugue", e.target.value)} placeholder="Nombre del cónyuge" className={inp} />
+                                <input type="text" value={form.conyugue} onChange={e => setField("conyugue", e.target.value)} placeholder="Nombre del conyuge" className={inp} />
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <input type="text" value={form.dniConyugue} onChange={e => setField("dniConyugue", e.target.value)} placeholder="DNI cónyuge" className={inp} />
-                                    <input type="text" value={form.telConyugue} onChange={e => setField("telConyugue", e.target.value)} placeholder="Tel. cónyuge" className={inp} />
+                                    <input type="text" value={form.dniConyugue} onChange={e => setField("dniConyugue", e.target.value)} placeholder="DNI conyuge" className={inp} />
+                                    <input type="text" value={form.telConyugue} onChange={e => setField("telConyugue", e.target.value)} placeholder="Tel. conyuge" className={inp} />
                                 </div>
                             </div>
                         </div>
@@ -394,7 +415,7 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
                                             {p.semanas === 0
                                                 ? <div className="text-emerald-400 text-xs font-semibold">$ {formatARS(p.calcTotal)}</div>
                                                 : p.primeraCuotaPaga
-                                                    ? <div className="text-xs text-neutral-400">1ra paga + {p.cuotasPendientes} x <span className="text-emerald-400 font-semibold">$ {formatARS(p.cuota)}</span><span className="text-neutral-500"> · saldo $ {formatARS(p.saldo)}</span></div>
+                                                    ? <div className="text-xs text-neutral-400">1ra paga + {p.cuotasPendientes} x <span className="text-emerald-400 font-semibold">$ {formatARS(p.cuota)}</span><span className="text-neutral-500"> - saldo $ {formatARS(p.saldo)}</span></div>
                                                     : <div className="text-xs text-neutral-400">{p.semanas} x <span className="text-emerald-400 font-semibold">$ {formatARS(p.cuota)}</span><span className="text-neutral-500"> = $ {formatARS(p.calcTotal)}</span></div>
                                             }
                                             {p.badge && <span className="text-xs bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded-full">{p.badge}</span>}
@@ -406,7 +427,7 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
 
                         {/* Preview */}
                         <div className="flex-1 flex flex-col gap-2">
-                            <p className="text-xs text-neutral-500 font-medium uppercase tracking-wide">Vista previa — Nota de Pedido</p>
+                            <p className="text-xs text-neutral-500 font-medium uppercase tracking-wide">Vista previa - Nota de Pedido</p>
                             <textarea
                                 value={fichaText}
                                 onChange={e => setFichaText(e.target.value)}
@@ -421,13 +442,18 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
                                 </button>
                                 <button
                                     onClick={handleWhatsAppSend}
-                                    disabled={saving || !form.cliente.trim()}
+                                    disabled={saving || hasMissingRequiredFields}
                                     className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl text-xs font-medium transition-colors"
                                 >
                                     {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Share2 className="w-3.5 h-3.5" />}
                                     {saving ? "Guardando..." : "WhatsApp"}
                                 </button>
                             </div>
+                            {hasMissingRequiredFields && (
+                                <p className="text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-lg px-2.5 py-2">
+                                    Completa obligatorios: {missingRequiredFields.join(", ")}.
+                                </p>
+                            )}
                             {submitError && (
                                 <p className="text-[11px] text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg px-2.5 py-2">
                                     {submitError}

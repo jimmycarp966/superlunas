@@ -1,6 +1,9 @@
 import { Registration, ClientRecord } from "./types";
 import { supabase } from "./supabase";
 import * as xlsx from "xlsx";
+import { crearCreditoSolicitud, parseAmountLoose } from "./creditos";
+import { SessionPayload } from "./roles";
+import { confirmarSalidaStockPorRegistro } from "./stock";
 
 const getErrorMessage = (error: unknown): string => {
     if (error instanceof Error) return error.message;
@@ -116,6 +119,28 @@ export const getRegistrations = async (): Promise<Registration[]> => {
     return (data as Record<string, unknown>[]).map(rowToRegistration);
 };
 
+export const getRegistrationsByVendedorMesActual = async (
+    vendedor: string,
+): Promise<Registration[]> => {
+    const vendedorNorm = String(vendedor ?? "").trim();
+    if (!vendedorNorm) return [];
+
+    const now = new Date();
+    const firstDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+    const nextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)).toISOString();
+
+    const { data, error } = await supabase
+        .from("registrations")
+        .select("*")
+        .eq("vendedor", vendedorNorm)
+        .gte("fecha", firstDay)
+        .lt("fecha", nextMonth)
+        .order("fecha", { ascending: false });
+
+    if (error || !data) return [];
+    return (data as Record<string, unknown>[]).map(rowToRegistration);
+};
+
 export const addOrUpdateClient = async (client: ClientRecord): Promise<void> => {
     const nombre = client.nombre.toUpperCase().trim();
     const normalizedInput: ClientRecord = { ...client, nombre };
@@ -151,14 +176,22 @@ export const addOrUpdateClient = async (client: ClientRecord): Promise<void> => 
     if (insertError) throw new Error(`No se pudo guardar client: ${insertError.message}`);
 };
 
-export const addRegistration = async (data: Omit<Registration, "id" | "fecha">): Promise<Registration> => {
+export const addRegistration = async (
+    data: Omit<Registration, "id" | "fecha">,
+    actor?: SessionPayload,
+): Promise<Registration> => {
     const reg: Registration = {
         ...data,
         id: Date.now().toString(),
         fecha: new Date().toISOString(),
     };
 
-    await supabase.from("registrations").insert(registrationToRow(reg));
+    const { error: insertRegistrationError } = await supabase
+        .from("registrations")
+        .insert(registrationToRow(reg));
+    if (insertRegistrationError) {
+        throw new Error(`No se pudo guardar registro de venta: ${insertRegistrationError.message}`);
+    }
 
     if (data.cliente) {
         await addOrUpdateClient({
@@ -175,6 +208,37 @@ export const addRegistration = async (data: Omit<Registration, "id" | "fecha">):
             zona: data.zona,
             nroCliente: data.nroCliente,
         });
+    }
+
+    await confirmarSalidaStockPorRegistro({
+        registroId: reg.id,
+        productosText: data.productos,
+        session: actor,
+    });
+
+    const isContado = String(data.planes ?? "").toUpperCase().includes("CONTADO");
+    const totalNumber = parseAmountLoose(data.total);
+    if (!isContado && totalNumber > 0 && data.cliente.trim()) {
+        const sellerSession: SessionPayload = actor ?? {
+            role: "vendedor",
+            username: String(data.vendedor || "vendedor").trim().toLowerCase(),
+            nombre: String(data.vendedor || "Vendedor"),
+            sucursalId: null,
+            zona: data.zona || null,
+        };
+
+        try {
+            await crearCreditoSolicitud(sellerSession, {
+                cliente: data.cliente,
+                dni: data.dni,
+                vendedor: data.vendedor,
+                zona: data.zona,
+                total: totalNumber,
+                observaciones: data.observaciones || null,
+            });
+        } catch {
+            // Si la tabla de creditos no existe todavia, no bloquea la nota de pedido.
+        }
     }
 
     return reg;
@@ -383,7 +447,15 @@ export const loadClientsFromBuffer = async (buffer: Buffer): Promise<number> => 
             dniConyugue: String(row["DNI CONYUGUE"] || ""),
             telConyugue: String(row["TEL CONYUGUE"] || ""),
             zona: String(row["ZONA"] || ""),
-            nroCliente: String(row["NÂ° CLIENTE"] || row["NÂº CLIENTE"] || ""),
+            nroCliente: String(
+                row["N° CLIENTE"] ||
+                row["Nº CLIENTE"] ||
+                row["NRO CLIENTE"] ||
+                row["NRO_CLIENTE"] ||
+                row["NÂ° CLIENTE"] ||
+                row["NÂº CLIENTE"] ||
+                ""
+            ),
         });
     });
 

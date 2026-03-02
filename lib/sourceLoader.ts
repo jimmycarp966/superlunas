@@ -88,6 +88,16 @@ const parseExcelBuffer = (buffer: Buffer): Product[] => {
             return Number.isFinite(parsed) ? parsed : 100;
         })(),
         lista: String(row.lista || row.Lista || "local").trim().toLowerCase(),
+        color: row.color ? String(row.color) : row.Color ? String(row.Color) : null,
+        tamano: row.tamano ? String(row.tamano) : row.Tamano ? String(row.Tamano) : row.talle ? String(row.talle) : null,
+        modelo: row.modelo ? String(row.modelo) : row.Modelo ? String(row.Modelo) : null,
+        garantiaMeses: (() => {
+            const value = Number(row.garantia_meses ?? row.garantiaMeses ?? row.GarantiaMeses);
+            return Number.isFinite(value) ? value : null;
+        })(),
+        requiereSerie: Boolean(row.requiere_serie ?? row.requiereSerie ?? row.RequiereSerie ?? false),
+        numeroSerie: row.numero_serie ? String(row.numero_serie) : row.numeroSerie ? String(row.numeroSerie) : null,
+        imagenUrl: row.imagen_url ? String(row.imagen_url) : row.imagen ? String(row.imagen) : row.foto ? String(row.foto) : null,
     })).filter(p => p.codigo !== "");
 };
 
@@ -196,6 +206,13 @@ const parsePdfBuffer = async (buffer: Buffer): Promise<Product[]> => {
                                 precio: normalizePrice(rawPrecio),
                                 stock,
                                 lista: "local",
+                                color: null,
+                                tamano: null,
+                                modelo: null,
+                                garantiaMeses: null,
+                                requiereSerie: false,
+                                numeroSerie: null,
+                                imagenUrl: null,
                             });
                         }
                     } else {
@@ -233,6 +250,13 @@ const parsePdfBuffer = async (buffer: Buffer): Promise<Product[]> => {
                                 precio: normalizePrice(rawPrecio),
                                 stock,
                                 lista: "local",
+                                color: null,
+                                tamano: null,
+                                modelo: null,
+                                garantiaMeses: null,
+                                requiereSerie: false,
+                                numeroSerie: null,
+                                imagenUrl: null,
                             });
                         }
                     }
@@ -274,6 +298,13 @@ const loadProductsFromSupabase = async (): Promise<Product[] | null> => {
             precio: Number(row.precio),
             stock: Number(row.stock),
             lista: String(row.lista),
+            color: row.color ? String(row.color) : null,
+            tamano: row.tamano ? String(row.tamano) : null,
+            modelo: row.modelo ? String(row.modelo) : null,
+            garantiaMeses: row.garantia_meses ? Number(row.garantia_meses) : null,
+            requiereSerie: Boolean(row.requiere_serie ?? false),
+            numeroSerie: row.numero_serie ? String(row.numero_serie) : null,
+            imagenUrl: row.imagen_url ? String(row.imagen_url) : null,
         }));
     } catch {
         return null;
@@ -291,6 +322,13 @@ const saveProductsToSupabase = async (products: Product[]): Promise<void> => {
         precio: p.precio,
         stock: p.stock,
         lista: p.lista,
+        color: p.color ?? null,
+        tamano: p.tamano ?? null,
+        modelo: p.modelo ?? null,
+        garantia_meses: p.garantiaMeses ?? null,
+        requiere_serie: Boolean(p.requiereSerie ?? false),
+        numero_serie: p.numeroSerie ?? null,
+        imagen_url: p.imagenUrl ?? null,
     }));
     const BATCH = 500;
 
