@@ -90,6 +90,7 @@ function CotizadorCol({ products, plans, settings, onFicha, mode = "single" }: C
     const [primeraCuotaMap, setPrimeraCuotaMap] = useState<Record<string, boolean>>({});
     const [selectedPlanId, setSelectedPlanId] = useState("");
     const [cartItems, setCartItems] = useState<CartItem[]>([]);
+    const [cartError, setCartError] = useState<string | null>(null);
     const deferredSearch = useDeferredValue(search);
     const productsByCode = useMemo(() => {
         const map = new Map<string, any>();
@@ -193,6 +194,7 @@ function CotizadorCol({ products, plans, settings, onFicha, mode = "single" }: C
         setQty(1);
         setAnticipo(0);
         setSearch("");
+        setCartError(null);
         if (mode === "cart") setCartItems([]);
         setPrimeraCuotaMap({});
         setSelectedPlanId(plans[0] ? String(plans[0].id) : "");
@@ -211,31 +213,28 @@ function CotizadorCol({ products, plans, settings, onFicha, mode = "single" }: C
         const precio = Number(product.precio) || 0;
         const stock = Number(product.stock) || 0;
 
+        // Validar stock ANTES de llamar a setCartItems para evitar side effects en el updater
+        const existingItem = cartItems.find((item) => item.codigo === codigo);
+        if (stock > 0) {
+            if (!existingItem && qty > stock) {
+                setCartError(`Stock insuficiente. Disponible: ${stock}`);
+                return;
+            }
+            if (existingItem && existingItem.qty + qty > stock) {
+                setCartError(`Stock insuficiente. Disponible: ${stock}. En carrito: ${existingItem.qty}`);
+                return;
+            }
+        }
+
+        setCartError(null);
         setCartItems((prev) => {
             const existingIndex = prev.findIndex((item) => item.codigo === codigo);
             if (existingIndex === -1) {
-                if (stock > 0 && qty > stock) {
-                    alert(`Stock insuficiente. Disponible: ${stock}`);
-                    return prev;
-                }
                 return [...prev, { codigo, nombre, precio, stock, qty }];
             }
-
-            const currentQty = prev[existingIndex].qty;
-            if (stock > 0 && currentQty + qty > stock) {
-                alert(`Stock insuficiente. Disponible: ${stock}. En carrito: ${currentQty}`);
-                return prev;
-            }
-
             return prev.map((item, index) =>
                 index === existingIndex
-                    ? {
-                        ...item,
-                        qty: item.qty + qty,
-                        precio,
-                        stock,
-                        nombre,
-                    }
+                    ? { ...item, qty: item.qty + qty, precio, stock, nombre }
                     : item
             );
         });
@@ -320,6 +319,7 @@ function CotizadorCol({ products, plans, settings, onFicha, mode = "single" }: C
                         onChange={(e) => {
                             const p = productsByCode.get(e.target.value);
                             setProduct(p || null);
+                            setCartError(null);
                         }}
                     >
                         <option value="">Resultados...</option>
@@ -422,6 +422,12 @@ function CotizadorCol({ products, plans, settings, onFicha, mode = "single" }: C
             {copiedPhoto && (
                 <div className="bg-sky-500/20 border border-sky-500/40 text-sky-200 text-xs font-bold rounded-md px-2.5 py-1.5 text-center">
                     URL de foto copiada
+                </div>
+            )}
+
+            {cartError && (
+                <div className="bg-red-900/30 border border-red-500/50 text-red-300 text-xs font-bold rounded-md px-2.5 py-1.5 text-center">
+                    {cartError}
                 </div>
             )}
 
