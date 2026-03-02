@@ -559,13 +559,8 @@ export default function CotizadorPage() {
         const fromSettings = Array.isArray(settings?.listas) ? settings.listas : [];
         const fallback = selectedList ? [selectedList] : ["local"];
         const merged = fromSettings.length > 0 ? fromSettings : fallback;
-        return Array.from(
-            new Set(
-                merged
-                    .map((value) => String(value ?? "").trim().toLowerCase())
-                    .filter(Boolean)
-            )
-        );
+        const normalized = merged.map((value: unknown) => String(value ?? "").trim().toLowerCase()).filter(Boolean);
+        return Array.from(new Set(normalized)) as string[];
     }, [settings, selectedList]);
 
     const fetchPlans = useCallback(async () => {
