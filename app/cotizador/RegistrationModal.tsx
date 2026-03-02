@@ -301,7 +301,7 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
 
                         {/* Vendedor */}
                         <div>
-                            <label className="text-xs text-neutral-500 mb-1 block">Vendedor</label>
+                            <label className="text-xs text-neutral-500 mb-1 block">Vendedor <span className="text-red-400">*</span></label>
                             <input type="text" value={vendedor} onChange={e => setVendedor(e.target.value.toUpperCase())} placeholder="Nombre del vendedor..." className={inp} />
                         </div>
 
@@ -336,7 +336,7 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
                                 <input type="text" value={form.nroCliente} onChange={e => setField("nroCliente", e.target.value)} className={inp} />
                             </div>
                             <div>
-                                <label className="text-xs text-neutral-500 mb-1 block">DNI</label>
+                                <label className="text-xs text-neutral-500 mb-1 block">DNI <span className="text-red-400">*</span></label>
                                 <input type="text" value={form.dni} onChange={e => setField("dni", e.target.value)} className={inp} />
                             </div>
                         </div>
@@ -344,11 +344,11 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
                         {/* Telefono + Localidad */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
-                                <label className="text-xs text-neutral-500 mb-1 block">Telefono</label>
+                                <label className="text-xs text-neutral-500 mb-1 block">Telefono <span className="text-red-400">*</span></label>
                                 <input type="text" value={form.telefono} onChange={e => setField("telefono", e.target.value)} className={inp} />
                             </div>
                             <div>
-                                <label className="text-xs text-neutral-500 mb-1 block">Localidad</label>
+                                <label className="text-xs text-neutral-500 mb-1 block">Localidad <span className="text-red-400">*</span></label>
                                 <input type="text" value={form.localidad} onChange={e => setField("localidad", e.target.value)} className={inp} />
                             </div>
                         </div>
@@ -356,11 +356,11 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
                         {/* Zona + Rubro */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
-                                <label className="text-xs text-neutral-500 mb-1 block">Zona</label>
+                                <label className="text-xs text-neutral-500 mb-1 block">Zona <span className="text-red-400">*</span></label>
                                 <input type="text" value={form.zona} onChange={e => setField("zona", e.target.value)} className={inp} />
                             </div>
                             <div>
-                                <label className="text-xs text-neutral-500 mb-1 block">Rubro</label>
+                                <label className="text-xs text-neutral-500 mb-1 block">Rubro <span className="text-red-400">*</span></label>
                                 <input type="text" value={form.rubro} onChange={e => setField("rubro", e.target.value)} placeholder="Despensa, Ferreteria..." className={inp} />
                             </div>
                         </div>
@@ -368,11 +368,11 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
                         {/* Dom. Comercial + Dom. Particular */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
-                                <label className="text-xs text-neutral-500 mb-1 block">Dom. Comercial</label>
+                                <label className="text-xs text-neutral-500 mb-1 block">Dom. Comercial <span className="text-red-400">*</span></label>
                                 <input type="text" value={form.domCom} onChange={e => setField("domCom", e.target.value)} className={inp} />
                             </div>
                             <div>
-                                <label className="text-xs text-neutral-500 mb-1 block">Dom. Particular</label>
+                                <label className="text-xs text-neutral-500 mb-1 block">Dom. Particular <span className="text-red-400">*</span></label>
                                 <input type="text" value={form.domPar} onChange={e => setField("domPar", e.target.value)} className={inp} />
                             </div>
                         </div>
@@ -381,10 +381,10 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
                         <div className="border-t border-neutral-800 pt-3">
                             <p className="text-xs text-neutral-500 mb-2 font-medium uppercase tracking-wide">Conyuge / Co-titular</p>
                             <div className="space-y-2">
-                                <input type="text" value={form.conyugue} onChange={e => setField("conyugue", e.target.value)} placeholder="Nombre del conyuge" className={inp} />
+                                <input type="text" value={form.conyugue} onChange={e => setField("conyugue", e.target.value)} placeholder="Nombre del conyuge *" className={inp} />
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <input type="text" value={form.dniConyugue} onChange={e => setField("dniConyugue", e.target.value)} placeholder="DNI conyuge" className={inp} />
-                                    <input type="text" value={form.telConyugue} onChange={e => setField("telConyugue", e.target.value)} placeholder="Tel. conyuge" className={inp} />
+                                    <input type="text" value={form.dniConyugue} onChange={e => setField("dniConyugue", e.target.value)} placeholder="DNI conyuge *" className={inp} />
+                                    <input type="text" value={form.telConyugue} onChange={e => setField("telConyugue", e.target.value)} placeholder="Tel. conyuge *" className={inp} />
                                 </div>
                             </div>
                         </div>
