@@ -14,6 +14,28 @@ const defaultSettings: Settings = {
     },
 };
 
+const DEFAULT_SETTINGS_CACHE_TTL_MS = 30000;
+const parsedCacheTtlMs = Number(process.env.SETTINGS_CACHE_TTL_MS ?? DEFAULT_SETTINGS_CACHE_TTL_MS);
+const SETTINGS_CACHE_TTL_MS = Number.isFinite(parsedCacheTtlMs) && parsedCacheTtlMs > 0
+    ? parsedCacheTtlMs
+    : DEFAULT_SETTINGS_CACHE_TTL_MS;
+
+type CacheEntry<T> = {
+    value: T;
+    expiresAt: number;
+};
+
+let settingsCache: CacheEntry<Settings> | null = null;
+let plansCache: CacheEntry<Plan[]> | null = null;
+
+const isCacheValid = <T>(entry: CacheEntry<T> | null): entry is CacheEntry<T> => {
+    return Boolean(entry && entry.expiresAt > Date.now());
+};
+
+const cloneData = <T>(value: T): T => {
+    return JSON.parse(JSON.stringify(value)) as T;
+};
+
 
 const rowToSettings = (row: Record<string, unknown>): Settings => ({
     redondeoTotal: (row.redondeo_total as 0 | 2) ?? defaultSettings.redondeoTotal,
@@ -53,6 +75,10 @@ const planToRow = (p: Plan) => ({
 });
 
 export const getSettings = async (): Promise<Settings> => {
+    if (isCacheValid(settingsCache)) {
+        return cloneData(settingsCache.value);
+    }
+
     const { data, error } = await supabase
         .from("app_settings")
         .select("*")
@@ -62,7 +88,13 @@ export const getSettings = async (): Promise<Settings> => {
     if (error) throw new Error(`Error leyendo app_settings en Supabase: ${error.message}`);
     if (!data) throw new Error("No existe app_settings.id=1 en Supabase");
 
-    return rowToSettings(data as Record<string, unknown>);
+    const resolved = rowToSettings(data as Record<string, unknown>);
+    settingsCache = {
+        value: resolved,
+        expiresAt: Date.now() + SETTINGS_CACHE_TTL_MS,
+    };
+
+    return cloneData(resolved);
 };
 
 export const updateSettings = async (newSettings: Partial<Settings>): Promise<Settings> => {
@@ -73,10 +105,19 @@ export const updateSettings = async (newSettings: Partial<Settings>): Promise<Se
         .from("app_settings")
         .upsert(settingsToRow(updated));
 
-    return updated;
+    settingsCache = {
+        value: updated,
+        expiresAt: Date.now() + SETTINGS_CACHE_TTL_MS,
+    };
+
+    return cloneData(updated);
 };
 
 export const getPlans = async (): Promise<Plan[]> => {
+    if (isCacheValid(plansCache)) {
+        return cloneData(plansCache.value);
+    }
+
     const { data, error } = await supabase
         .from("plans")
         .select("*")
@@ -85,7 +126,13 @@ export const getPlans = async (): Promise<Plan[]> => {
     if (error) throw new Error(`Error leyendo plans en Supabase: ${error.message}`);
     if (!data || data.length === 0) throw new Error("La tabla plans en Supabase no tiene registros");
 
-    return (data as Record<string, unknown>[]).map(rowToPlan);
+    const resolved = (data as Record<string, unknown>[]).map(rowToPlan);
+    plansCache = {
+        value: resolved,
+        expiresAt: Date.now() + SETTINGS_CACHE_TTL_MS,
+    };
+
+    return cloneData(resolved);
 };
 
 export const updatePlans = async (newPlans: Plan[]): Promise<Plan[]> => {
@@ -95,5 +142,11 @@ export const updatePlans = async (newPlans: Plan[]): Promise<Plan[]> => {
     const { error: insertError } = await supabase.from("plans").insert(newPlans.map(planToRow));
     if (insertError) throw new Error(insertError.message);
 
-    return [...newPlans];
+    const resolved = [...newPlans].sort((a, b) => a.orden - b.orden);
+    plansCache = {
+        value: resolved,
+        expiresAt: Date.now() + SETTINGS_CACHE_TTL_MS,
+    };
+
+    return cloneData(resolved);
 };

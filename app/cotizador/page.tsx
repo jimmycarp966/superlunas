@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useDeferredValue, useRef } from "react";
 import { ClipboardList, RotateCcw, Check } from "lucide-react";
 import { calcPlanStats, generatePresupuestoText, formatARS } from "./utils";
 import RegistrationModal from "./RegistrationModal";
@@ -86,13 +86,24 @@ function CotizadorCol({ products, plans, settings, onFicha, mode = "single" }: C
     const [qty, setQty] = useState(1);
     const [anticipo, setAnticipo] = useState(0);
     const [copied, setCopied] = useState(false);
+    const [copiedPhoto, setCopiedPhoto] = useState(false);
     const [primeraCuotaMap, setPrimeraCuotaMap] = useState<Record<string, boolean>>({});
     const [selectedPlanId, setSelectedPlanId] = useState("");
     const [cartItems, setCartItems] = useState<CartItem[]>([]);
+    const deferredSearch = useDeferredValue(search);
+    const productsByCode = useMemo(() => {
+        const map = new Map<string, any>();
+        for (const item of products) {
+            const code = String(item?.codigo ?? "");
+            if (!code) continue;
+            map.set(code, item);
+        }
+        return map;
+    }, [products]);
 
     useEffect(() => {
         if (!product) return;
-        const updated = products.find((p) => p.codigo === product.codigo);
+        const updated = productsByCode.get(String(product.codigo));
         if (!updated) {
             setProduct(null);
             return;
@@ -104,13 +115,13 @@ function CotizadorCol({ products, plans, settings, onFicha, mode = "single" }: C
         ) {
             setProduct(updated);
         }
-    }, [products, product]);
+    }, [productsByCode, product]);
 
     useEffect(() => {
         if (mode !== "cart") return;
         setCartItems((prev) =>
             prev.map((item) => {
-                const updated = products.find((p) => p.codigo === item.codigo);
+                const updated = productsByCode.get(item.codigo);
                 if (!updated) return item;
                 const updatedPrecio = Number(updated.precio);
                 const updatedStock = Number(updated.stock);
@@ -122,7 +133,7 @@ function CotizadorCol({ products, plans, settings, onFicha, mode = "single" }: C
                 };
             })
         );
-    }, [products, mode]);
+    }, [productsByCode, mode]);
 
     useEffect(() => {
         const validIds = new Set(plans.map((p: any) => String(p.id)));
@@ -141,7 +152,7 @@ function CotizadorCol({ products, plans, settings, onFicha, mode = "single" }: C
     }, [plans]);
 
     const filtered = useMemo(() => {
-        const q = search.toLowerCase().trim();
+        const q = deferredSearch.toLowerCase().trim();
         if (!q) return products.slice(0, 100);
         return products
             .filter(
@@ -150,7 +161,7 @@ function CotizadorCol({ products, plans, settings, onFicha, mode = "single" }: C
                     p.codigo.toLowerCase().includes(q)
             )
             .slice(0, 100);
-    }, [search, products]);
+    }, [deferredSearch, products]);
 
     const calc = useMemo(() => {
         const manualDesc = manualDescription.trim();
@@ -203,7 +214,17 @@ function CotizadorCol({ products, plans, settings, onFicha, mode = "single" }: C
         setCartItems((prev) => {
             const existingIndex = prev.findIndex((item) => item.codigo === codigo);
             if (existingIndex === -1) {
+                if (stock > 0 && qty > stock) {
+                    alert(`Stock insuficiente. Disponible: ${stock}`);
+                    return prev;
+                }
                 return [...prev, { codigo, nombre, precio, stock, qty }];
+            }
+
+            const currentQty = prev[existingIndex].qty;
+            if (stock > 0 && currentQty + qty > stock) {
+                alert(`Stock insuficiente. Disponible: ${stock}. En carrito: ${currentQty}`);
+                return prev;
             }
 
             return prev.map((item, index) =>
@@ -232,6 +253,24 @@ function CotizadorCol({ products, plans, settings, onFicha, mode = "single" }: C
         } catch {
             setCopied(false);
         }
+    };
+
+    const handleCopyPhoto = async () => {
+        if (!product?.imagenUrl) return;
+        try {
+            await navigator.clipboard.writeText(String(product.imagenUrl));
+            setCopiedPhoto(true);
+            setTimeout(() => setCopiedPhoto(false), 1800);
+        } catch {
+            setCopiedPhoto(false);
+        }
+    };
+
+    const handleSendWhatsapp = () => {
+        if (disableActions) return;
+        const text = generatePresupuestoText(calc);
+        const waUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
+        window.open(waUrl, "_blank");
     };
 
     const selectedProductSubtotal = (Number(product?.precio) || 0) * qty;
@@ -279,7 +318,7 @@ function CotizadorCol({ products, plans, settings, onFicha, mode = "single" }: C
                         className="w-full bg-[#0f1a2a] border border-[#2d3b4f] text-white font-bold rounded-lg px-3 py-2.5 text-sm focus:outline-none cursor-pointer"
                         value={product?.codigo || ""}
                         onChange={(e) => {
-                            const p = products.find((prod) => prod.codigo === e.target.value);
+                            const p = productsByCode.get(e.target.value);
                             setProduct(p || null);
                         }}
                     >
@@ -339,7 +378,7 @@ function CotizadorCol({ products, plans, settings, onFicha, mode = "single" }: C
                 className="w-full bg-[#f3e8c8] text-[#2b2b2b] font-bold px-3 py-2 rounded-md border border-[#e7d7ae] focus:outline-none text-sm"
             />
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
                 <button
                     onClick={() => {
                         if (disableActions) return;
@@ -366,11 +405,23 @@ function CotizadorCol({ products, plans, settings, onFicha, mode = "single" }: C
                 >
                     <ClipboardList className="w-4 h-4" /> Copiar
                 </button>
+                <button
+                    onClick={handleSendWhatsapp}
+                    disabled={disableActions}
+                    className="bg-[#25D366] hover:bg-[#1fb95a] disabled:opacity-50 disabled:cursor-not-allowed text-white font-black py-2 rounded-md text-[12px] uppercase tracking-wide flex items-center justify-center gap-1.5"
+                >
+                    WhatsApp
+                </button>
             </div>
 
             {copied && (
                 <div className="bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold rounded-md px-2.5 py-1.5 text-center">
                     Mensaje copiado
+                </div>
+            )}
+            {copiedPhoto && (
+                <div className="bg-sky-500/20 border border-sky-500/40 text-sky-200 text-xs font-bold rounded-md px-2.5 py-1.5 text-center">
+                    URL de foto copiada
                 </div>
             )}
 
@@ -435,6 +486,21 @@ function CotizadorCol({ products, plans, settings, onFicha, mode = "single" }: C
                     <div className="text-white font-black text-[15px] sm:text-[19px] leading-tight uppercase">
                         [{product.codigo}] {product.nombre}
                     </div>
+                    {product.imagenUrl && (
+                        <div className="mt-2">
+                            <img
+                                src={String(product.imagenUrl)}
+                                alt={product.nombre}
+                                className="w-full h-28 object-cover rounded border border-[#2d3b4f]"
+                            />
+                            <button
+                                onClick={handleCopyPhoto}
+                                className="mt-2 w-full bg-[#2c8ffd] hover:bg-[#277fdd] text-white text-[11px] font-black py-1.5 rounded uppercase tracking-wide"
+                            >
+                                Copiar Foto al Cotizador
+                            </button>
+                        </div>
+                    )}
                     <div className="text-[#ffc64f] font-extrabold text-[30px] sm:text-[40px] leading-none mt-1">
                         ${formatARS(selectedProductSubtotal)}
                     </div>
@@ -481,10 +547,24 @@ export default function CotizadorPage() {
 
     const [showRegistration, setShowRegistration] = useState(false);
     const [activeCalc, setActiveCalc] = useState<any | null>(null);
+    const plansSyncLastRunRef = useRef(0);
+
+    const listOptions = useMemo(() => {
+        const fromSettings = Array.isArray(settings?.listas) ? settings.listas : [];
+        const fallback = selectedList ? [selectedList] : ["local"];
+        const merged = fromSettings.length > 0 ? fromSettings : fallback;
+        return Array.from(
+            new Set(
+                merged
+                    .map((value) => String(value ?? "").trim().toLowerCase())
+                    .filter(Boolean)
+            )
+        );
+    }, [settings, selectedList]);
 
     const fetchPlans = useCallback(async () => {
         try {
-            const res = await fetch(`/api/plans?_t=${Date.now()}`, { cache: "no-store" });
+            const res = await fetch("/api/plans", { cache: "no-store" });
             const json = await res.json();
             if (json.success) {
                 setPlans(
@@ -502,7 +582,7 @@ export default function CotizadorPage() {
 
     const fetchSettings = useCallback(async () => {
         try {
-            const res = await fetch(`/api/settings?_t=${Date.now()}`, { cache: "no-store" });
+            const res = await fetch("/api/settings", { cache: "no-store" });
             const json = await res.json();
             if (json.success) {
                 setSettings(json.data);
@@ -514,32 +594,61 @@ export default function CotizadorPage() {
         return null;
     }, []);
 
+    const fetchProducts = useCallback(async (listName: string) => {
+        const listKey = (listName || "").trim().toLowerCase() || "local";
+        try {
+            const res = await fetch(
+                `/api/products?list=${encodeURIComponent(listKey)}`,
+                { cache: "no-store" }
+            );
+            const json = await res.json();
+            if (json.success) {
+                setProducts(json.data);
+                return true;
+            }
+        } catch {
+            // Ignorado: se mantiene el ultimo estado util.
+        }
+        return false;
+    }, []);
+
+    const handleListChange = useCallback((nextListRaw: string) => {
+        const nextList = String(nextListRaw ?? "").trim().toLowerCase() || "local";
+        setSelectedList(nextList);
+        void fetchProducts(nextList);
+    }, [fetchProducts]);
+
     useEffect(() => {
         let active = true;
         const load = async () => {
             setLoading(true);
-            const [_, settingsData] = await Promise.all([fetchPlans(), fetchSettings()]);
+            const [, settingsData] = await Promise.all([fetchPlans(), fetchSettings()]);
             if (!active) return;
+            let initialList = "local";
             if (settingsData?.listas?.length > 0) {
-                setSelectedList(String(settingsData.listas[0]));
+                initialList = String(settingsData.listas[0]).trim().toLowerCase() || "local";
             }
+            setSelectedList(initialList);
+            await fetchProducts(initialList);
+            if (!active) return;
             setLoading(false);
         };
         void load();
         return () => {
             active = false;
         };
-    }, [fetchPlans, fetchSettings]);
-
-    useEffect(() => {
-        if (settings) fetchProducts(selectedList);
-    }, [selectedList, settings]);
+    }, [fetchPlans, fetchSettings, fetchProducts]);
 
     useEffect(() => {
         if (typeof window === "undefined") return;
 
         let channel: BroadcastChannel | null = null;
-        const syncPlans = () => { void fetchPlans(); };
+        const syncPlans = () => {
+            const now = Date.now();
+            if (now - plansSyncLastRunRef.current < 4000) return;
+            plansSyncLastRunRef.current = now;
+            void fetchPlans();
+        };
 
         const handleStorage = (event: StorageEvent) => {
             if (event.key === PLANS_SYNC_STORAGE_KEY) syncPlans();
@@ -568,20 +677,6 @@ export default function CotizadorPage() {
         };
     }, [fetchPlans]);
 
-    async function fetchProducts(listName: string) {
-        const listKey = (listName || "").trim().toLowerCase();
-        try {
-            const res = await fetch(
-                `/api/products?list=${encodeURIComponent(listKey)}&_t=${Date.now()}`,
-                { cache: "no-store" }
-            );
-            const json = await res.json();
-            if (json.success) setProducts(json.data);
-        } catch {
-            // Ignorado: se mantiene el ultimo estado util.
-        }
-    }
-
     if (loading) {
         return <div className="p-8 text-neutral-500 text-sm">Cargando cotizador...</div>;
     }
@@ -592,10 +687,10 @@ export default function CotizadorPage() {
                 <div className="flex items-center gap-2">
                     <select
                         value={selectedList}
-                        onChange={(e) => setSelectedList(e.target.value)}
+                        onChange={(e) => handleListChange(e.target.value)}
                         className="flex-1 bg-[#f5f7fb] text-[#223049] font-black px-4 py-2 rounded-lg focus:outline-none text-sm"
                     >
-                        {settings?.listas.map((lst: string) => (
+                        {listOptions.map((lst: string) => (
                             <option key={lst} value={lst}>
                                 LISTA {lst.toUpperCase()}
                             </option>
