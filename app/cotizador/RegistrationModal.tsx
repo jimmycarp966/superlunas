@@ -239,6 +239,10 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(body),
             });
+            if (res.status === 401) {
+                window.location.href = "/";
+                return { success: false, error: "Sesion vencida. Redirigiendo al login..." };
+            }
             const json = await res.json();
             if (!res.ok || !json.success) {
                 return { success: false, error: json.error || "No se pudo guardar el registro." };

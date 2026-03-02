@@ -556,9 +556,14 @@ export default function CotizadorPage() {
         return Array.from(new Set(normalized)) as string[];
     }, [settings, selectedList]);
 
+    const handleSessionExpired = useCallback(() => {
+        window.location.href = "/";
+    }, []);
+
     const fetchPlans = useCallback(async () => {
         try {
             const res = await fetch("/api/plans", { cache: "no-store" });
+            if (res.status === 401) { handleSessionExpired(); return false; }
             const json = await res.json();
             if (json.success) {
                 setPlans(
@@ -572,11 +577,12 @@ export default function CotizadorPage() {
             // Ignorado: se mantiene el ultimo estado util.
         }
         return false;
-    }, []);
+    }, [handleSessionExpired]);
 
     const fetchSettings = useCallback(async () => {
         try {
             const res = await fetch("/api/settings", { cache: "no-store" });
+            if (res.status === 401) { handleSessionExpired(); return null; }
             const json = await res.json();
             if (json.success) {
                 setSettings(json.data);
@@ -586,7 +592,7 @@ export default function CotizadorPage() {
             // Ignorado: se mantiene el ultimo estado util.
         }
         return null;
-    }, []);
+    }, [handleSessionExpired]);
 
     const fetchProducts = useCallback(async (listName: string) => {
         const listKey = (listName || "").trim().toLowerCase() || "local";
@@ -595,6 +601,7 @@ export default function CotizadorPage() {
                 `/api/products?list=${encodeURIComponent(listKey)}`,
                 { cache: "no-store" }
             );
+            if (res.status === 401) { handleSessionExpired(); return false; }
             const json = await res.json();
             if (json.success) {
                 setProducts(json.data);
@@ -604,7 +611,7 @@ export default function CotizadorPage() {
             // Ignorado: se mantiene el ultimo estado util.
         }
         return false;
-    }, []);
+    }, [handleSessionExpired]);
 
     const handleListChange = useCallback((nextListRaw: string) => {
         const nextList = String(nextListRaw ?? "").trim().toLowerCase() || "local";
