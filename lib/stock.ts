@@ -45,7 +45,7 @@ export const confirmarSalidaStockPorRegistro = async (params: {
     for (const item of items) {
         const { data: productData, error: productError } = await supabase
             .from("products")
-            .select("codigo, stock, stock_minimo")
+            .select("codigo, stock")
             .eq("codigo", item.codigo)
             .single();
         if (productError || !productData) {
@@ -86,16 +86,7 @@ export const confirmarSalidaStockPorRegistro = async (params: {
             expires_at: new Date().toISOString(),
         });
 
-        const stockMinimo = Number((productData as { stock_minimo?: number }).stock_minimo ?? 0);
-        if (stockMinimo > 0 && newStock <= stockMinimo) {
-            await supabase.from("notificaciones").insert({
-                tipo: "stock_minimo",
-                titulo: `Stock minimo: ${item.codigo}`,
-                mensaje: `El producto ${item.codigo} quedo con ${newStock} unidades (umbral ${stockMinimo}).`,
-                referencia_id: item.codigo,
-                canal: "sistema",
-            });
-        }
+        // stock_minimo: columna pendiente de migración en Supabase
     }
 
     await recordAuditEvent(params.session, {
