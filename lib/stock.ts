@@ -42,51 +42,47 @@ export const confirmarSalidaStockPorRegistro = async (params: {
     const items = parseProductosFromText(params.productosText);
     if (items.length === 0) return;
 
+    // Gestión de stock en Supabase: se ejecuta solo si el producto existe en la tabla.
+    // Si la migración no fue aplicada o el producto no está sincronizado, se omite sin bloquear la nota de pedido.
     for (const item of items) {
-        const { data: productData, error: productError } = await supabase
-            .from("products")
-            .select("codigo, stock")
-            .eq("codigo", item.codigo)
-            .single();
-        if (productError || !productData) {
-            throw new Error(
-                `No se encontro producto ${item.codigo} para salida de stock (${productError?.message ?? "sin datos"}).`,
-            );
+        try {
+            const { data: productData, error: productError } = await supabase
+                .from("products")
+                .select("codigo, stock")
+                .eq("codigo", item.codigo)
+                .single();
+
+            if (productError || !productData) continue;
+
+            const currentStock = Number((productData as { stock?: number }).stock ?? 0);
+            if (currentStock < item.cantidad) continue;
+
+            const newStock = currentStock - item.cantidad;
+            await supabase
+                .from("products")
+                .update({ stock: newStock })
+                .eq("codigo", item.codigo);
+
+            await supabase.from("stock_movimientos").insert({
+                product_codigo: item.codigo,
+                sucursal_id: params.session?.sucursalId ?? null,
+                tipo: "salida",
+                cantidad: item.cantidad,
+                referencia: `registro:${params.registroId}`,
+                created_by: params.session?.username ?? params.session?.nombre ?? "sistema",
+            });
+
+            await supabase.from("stock_reservas").insert({
+                product_codigo: item.codigo,
+                sucursal_id: params.session?.sucursalId ?? null,
+                origen: `registro:${params.registroId}`,
+                cantidad: item.cantidad,
+                estado: "confirmada",
+                expires_at: new Date().toISOString(),
+            });
+        } catch {
+            // Si Supabase no tiene la tabla o el producto, no bloquea la nota de pedido.
         }
-
-        const currentStock = Number((productData as { stock?: number }).stock ?? 0);
-        if (currentStock < item.cantidad) {
-            throw new Error(`Stock insuficiente en ${item.codigo}. Disponible: ${currentStock}`);
-        }
-
-        const newStock = currentStock - item.cantidad;
-        const { error: updateError } = await supabase
-            .from("products")
-            .update({ stock: newStock })
-            .eq("codigo", item.codigo);
-        if (updateError) {
-            throw new Error(`No se pudo actualizar stock de ${item.codigo}: ${updateError.message}`);
-        }
-
-        await supabase.from("stock_movimientos").insert({
-            product_codigo: item.codigo,
-            sucursal_id: params.session?.sucursalId ?? null,
-            tipo: "salida",
-            cantidad: item.cantidad,
-            referencia: `registro:${params.registroId}`,
-            created_by: params.session?.username ?? params.session?.nombre ?? "sistema",
-        });
-
-        await supabase.from("stock_reservas").insert({
-            product_codigo: item.codigo,
-            sucursal_id: params.session?.sucursalId ?? null,
-            origen: `registro:${params.registroId}`,
-            cantidad: item.cantidad,
-            estado: "confirmada",
-            expires_at: new Date().toISOString(),
-        });
-
-        // stock_minimo: columna pendiente de migración en Supabase
     }
 
     await recordAuditEvent(params.session, {
