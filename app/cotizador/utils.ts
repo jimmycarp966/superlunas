@@ -136,6 +136,9 @@ export const generateNotaPedidoText = (
         domCom: string;
         domPar: string;
         selectedPlanId: string;
+        conyugue?: string;
+        dniConyugue?: string;
+        telConyugue?: string;
     }
 ): string => {
     const sep = "----------------------------";
@@ -167,6 +170,16 @@ export const generateNotaPedidoText = (
 
     const nroStr = opts.nroCliente ? ` [CLIENTE Nº: ${opts.nroCliente}]` : "";
 
+    const conyugueLines = opts.conyugue?.trim()
+        ? [
+            sep,
+            `[ CONYUGE / CO-TITULAR ]`,
+            `Nombre : ${opts.conyugue}`,
+            opts.dniConyugue?.trim() ? `DNI : ${opts.dniConyugue}` : "",
+            opts.telConyugue?.trim() ? `TEL : ${opts.telConyugue}` : "",
+          ].filter(Boolean)
+        : [];
+
     return [
         `* NOTA DE PEDIDO - LUNAS 2026`,
         `* RESERVA Y AUTORIZACION ZONA ${opts.zona.toUpperCase()}`,
@@ -182,6 +195,7 @@ export const generateNotaPedidoText = (
         `RUBRO : ${opts.rubro}`,
         `DOM. COM : ${opts.domCom}`,
         `DOM. PAR : ${opts.domPar}`,
+        ...conyugueLines,
         sep,
         ...productSection,
         `    PLAN : ${planLine}`,

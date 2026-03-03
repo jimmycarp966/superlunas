@@ -109,6 +109,9 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
             domCom: form.domCom,
             domPar: form.domPar,
             selectedPlanId,
+            conyugue: form.conyugue,
+            dniConyugue: form.dniConyugue,
+            telConyugue: form.telConyugue,
         }));
     }, [calc, anticipoFinal, form, vendedor, selectedPlanId]);
 
