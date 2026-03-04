@@ -166,7 +166,10 @@ export default function VersionGuard() {
     }, []);
 
     return (
-        <div className="pointer-events-none fixed bottom-2 left-2 z-[2147483647]">
+        <div
+            aria-hidden="true"
+            className="pointer-events-none fixed top-2 left-2 z-40 sm:top-auto sm:bottom-2 sm:left-2"
+        >
             {status === "up_to_date" && (
                 <div className="rounded-md border border-emerald-500/40 bg-emerald-500/15 px-2 py-1 text-[11px] font-semibold text-emerald-200 shadow-lg backdrop-blur-sm">
                     Ultima version {displayStamp ? `(${displayStamp})` : ""}
