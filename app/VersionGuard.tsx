@@ -14,7 +14,7 @@ interface VersionPayload {
 
 export default function VersionGuard() {
     const [status, setStatus] = useState<VersionStatus>("checking");
-    const [displayVersion, setDisplayVersion] = useState("");
+    const [displayStamp, setDisplayStamp] = useState("");
 
     useEffect(() => {
         if (typeof window === "undefined") return;
@@ -45,10 +45,14 @@ export default function VersionGuard() {
             }
         };
 
-        const shortVersion = (version: string): string => {
-            const clean = String(version ?? "").trim();
-            if (!clean) return "";
-            return clean.length > 12 ? clean.slice(0, 12) : clean;
+        const pad2 = (value: number): string => String(value).padStart(2, "0");
+
+        const formatLocalStamp = (date: Date): string => {
+            const dd = pad2(date.getDate());
+            const mm = pad2(date.getMonth() + 1);
+            const hh = pad2(date.getHours());
+            const min = pad2(date.getMinutes());
+            return `${dd}/${mm} ${hh}:${min}`;
         };
 
         const triggerReload = (nextVersion: string) => {
@@ -59,8 +63,8 @@ export default function VersionGuard() {
             window.location.reload();
         };
 
-        const markUpToDate = (version: string) => {
-            setDisplayVersion(shortVersion(version));
+        const markUpToDate = (_version: string) => {
+            setDisplayStamp(formatLocalStamp(new Date()));
             setStatus("up_to_date");
         };
 
@@ -158,7 +162,7 @@ export default function VersionGuard() {
         <div className="pointer-events-none fixed bottom-2 left-2 z-[2147483647]">
             {status === "up_to_date" && (
                 <div className="rounded-md border border-emerald-500/40 bg-emerald-500/15 px-2 py-1 text-[11px] font-semibold text-emerald-200 shadow-lg backdrop-blur-sm">
-                    Ultima version {displayVersion ? `(${displayVersion})` : ""}
+                    Ultima version {displayStamp ? `(${displayStamp})` : ""}
                 </div>
             )}
             {status === "updating" && (
