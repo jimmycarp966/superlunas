@@ -97,13 +97,14 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
         return anticipoManual + cuotaComoAnticipo;
     }, [calc.anticipo]);
 
+    const anticipoManual = Math.max(0, Number(calc.anticipo) || 0);
     const anticipoFinal = getAnticipoFinal(selectedPlan);
     const specialWeeks = Math.max(0, parseInt(specialWeeksInput, 10) || 0);
     const specialAmount = Math.max(0, parseInt(specialAmountInput, 10) || 0);
     const isSpecialFinancing = financingMode === "especial";
 
     useEffect(() => {
-        const calcForText = { ...calc, anticipo: isSpecialFinancing ? 0 : anticipoFinal };
+        const calcForText = { ...calc, anticipo: isSpecialFinancing ? anticipoManual : anticipoFinal };
         setFichaText(generateNotaPedidoText(calcForText, {
             vendedor,
             vendedorTelefono,
@@ -126,6 +127,7 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
         }));
     }, [
         calc,
+        anticipoManual,
         anticipoFinal,
         form,
         vendedor,
