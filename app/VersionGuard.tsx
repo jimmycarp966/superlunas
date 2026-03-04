@@ -16,23 +16,45 @@ export default function VersionGuard() {
 
         let currentVersion: string | null = null;
 
+        const readClientBuildId = (): string => {
+            const buildId = String(
+                (window as unknown as { __NEXT_DATA__?: { buildId?: string } }).__NEXT_DATA__?.buildId ?? "",
+            ).trim();
+            return buildId;
+        };
+
+        const readStoredVersion = (): string => {
+            try {
+                return String(localStorage.getItem(VERSION_SYNC_STORAGE_KEY) ?? "").trim();
+            } catch {
+                return "";
+            }
+        };
+
+        const persistVersion = (version: string) => {
+            try {
+                localStorage.setItem(VERSION_SYNC_STORAGE_KEY, version);
+            } catch {
+                // Best effort.
+            }
+        };
+
         const reloadIfChanged = (nextVersion: string) => {
             if (!nextVersion) return;
 
             if (!currentVersion) {
-                currentVersion = nextVersion;
+                const storedVersion = readStoredVersion();
+                const clientBuildId = readClientBuildId();
+                currentVersion = storedVersion || clientBuildId || nextVersion;
+            }
+
+            if (nextVersion !== currentVersion) {
+                persistVersion(nextVersion);
+                window.location.reload();
                 return;
             }
 
-            if (nextVersion === currentVersion) return;
-
-            try {
-                localStorage.setItem(VERSION_SYNC_STORAGE_KEY, nextVersion);
-            } catch {
-                // Best effort.
-            }
-
-            window.location.reload();
+            persistVersion(nextVersion);
         };
 
         const checkVersion = async () => {
@@ -59,6 +81,10 @@ export default function VersionGuard() {
             void checkVersion();
         };
 
+        const handleOnline = () => {
+            void checkVersion();
+        };
+
         const handleVisibility = () => {
             if (document.visibilityState === "visible") {
                 void checkVersion();
@@ -73,12 +99,14 @@ export default function VersionGuard() {
 
         window.addEventListener("storage", handleStorage);
         window.addEventListener("focus", handleFocus);
+        window.addEventListener("online", handleOnline);
         document.addEventListener("visibilitychange", handleVisibility);
 
         return () => {
             window.clearInterval(intervalId);
             window.removeEventListener("storage", handleStorage);
             window.removeEventListener("focus", handleFocus);
+            window.removeEventListener("online", handleOnline);
             document.removeEventListener("visibilitychange", handleVisibility);
         };
     }, []);
