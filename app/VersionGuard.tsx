@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 const VERSION_SYNC_STORAGE_KEY = "lunas_app_version";
 const VERSION_POLL_INTERVAL_MS = 3600000;
+const VERSION_BADGE_LABEL = "Ultima version";
 
 type VersionStatus = "checking" | "up_to_date" | "updating";
 
@@ -172,7 +173,7 @@ export default function VersionGuard() {
         >
             {status === "up_to_date" && (
                 <div className="rounded-md border border-emerald-500/40 bg-emerald-500/15 px-2 py-1 text-[11px] font-semibold text-emerald-200 shadow-lg backdrop-blur-sm">
-                    Ultima version {displayStamp ? `(${displayStamp})` : ""}
+                    {VERSION_BADGE_LABEL} {displayStamp ? `(${displayStamp})` : ""}
                 </div>
             )}
             {status === "updating" && (
