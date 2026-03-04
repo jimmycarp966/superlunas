@@ -10,6 +10,7 @@ type VersionStatus = "checking" | "up_to_date" | "updating";
 interface VersionPayload {
     success?: boolean;
     version?: string;
+    deployedAt?: string | null;
 }
 
 export default function VersionGuard() {
@@ -47,7 +48,9 @@ export default function VersionGuard() {
 
         const pad2 = (value: number): string => String(value).padStart(2, "0");
 
-        const formatLocalStamp = (date: Date): string => {
+        const formatLocalStamp = (rawIso: string | null | undefined): string => {
+            const date = new Date(String(rawIso ?? "").trim());
+            if (Number.isNaN(date.getTime())) return "";
             const dd = pad2(date.getDate());
             const mm = pad2(date.getMonth() + 1);
             const hh = pad2(date.getHours());
@@ -63,8 +66,8 @@ export default function VersionGuard() {
             window.location.reload();
         };
 
-        const markUpToDate = (_version: string) => {
-            setDisplayStamp(formatLocalStamp(new Date()));
+        const markUpToDate = (_version: string, deployedAt: string | null | undefined) => {
+            setDisplayStamp(formatLocalStamp(deployedAt));
             setStatus("up_to_date");
         };
 
@@ -79,7 +82,10 @@ export default function VersionGuard() {
             return nextVersion;
         };
 
-        const reloadIfChanged = (nextVersion: string) => {
+        const reloadIfChanged = (
+            nextVersion: string,
+            deployedAt: string | null | undefined,
+        ) => {
             if (!nextVersion) return;
 
             if (!currentVersion) {
@@ -93,7 +99,7 @@ export default function VersionGuard() {
 
             currentVersion = nextVersion;
             persistVersion(nextVersion);
-            markUpToDate(nextVersion);
+            markUpToDate(nextVersion, deployedAt);
         };
 
         const checkVersion = async () => {
@@ -103,7 +109,8 @@ export default function VersionGuard() {
 
                 const payload = (await res.json()) as VersionPayload;
                 const nextVersion = String(payload?.version ?? "").trim();
-                reloadIfChanged(nextVersion);
+                const deployedAt = payload?.deployedAt ?? null;
+                reloadIfChanged(nextVersion, deployedAt);
             } catch {
                 // Best effort.
             }
