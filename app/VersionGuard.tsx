@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 const VERSION_SYNC_STORAGE_KEY = "lunas_app_version";
-const VERSION_POLL_INTERVAL_MS = 120000;
+const VERSION_POLL_INTERVAL_MS = 3600000;
 
 type VersionStatus = "checking" | "up_to_date" | "updating";
 
