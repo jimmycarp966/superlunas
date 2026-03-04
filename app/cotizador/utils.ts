@@ -13,7 +13,7 @@ export function calcPlanStats(
     anticipo: number,
     plans: any[],
     _settings: any,
-    primeraCuotaMap: Record<string, boolean> = {}
+    primeraCuotaMap: Record<string, boolean> = {},
 ) {
     return plans.map((p) => {
         const rawRate = Number(p.tasaPorcentaje);
@@ -56,9 +56,9 @@ export function calcPlanStats(
 export const planToText = (p: any): string => {
     if (p.semanas === 0) return `CONTADO ($${formatARS(p.calcTotal)})`;
     let t = p.primeraCuotaPaga
-        ? `${p.semanas} SEMANAS (1RA PAGA + ${p.cuotasPendientes} de $${formatARS(p.cuota)})`
-        : `${p.semanas} SEMANAS (${p.semanas} de $${formatARS(p.cuota)})`;
-    if (p.badge) t += ` (${p.badge.toUpperCase()})`;
+        ? `${p.semanas} SEMANAS (1RA PAGA + ${p.cuotasPendientes} DE $${formatARS(p.cuota)})`
+        : `${p.semanas} SEMANAS (${p.semanas} DE $${formatARS(p.cuota)})`;
+    if (p.badge) t += ` (${String(p.badge).toUpperCase()})`;
     return t;
 };
 
@@ -67,7 +67,6 @@ const todayStr = (): string => {
     return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 };
 
-// Elimina prefijos [CODIGO] del texto de productos
 const stripCodes = (text: string): string =>
     text.replace(/\[\w[\w-]*\]\s*/g, "").trim();
 
@@ -77,9 +76,8 @@ const splitItemsLines = (itemsText: string): string[] =>
         .map((line) => line.trim())
         .filter(Boolean);
 
-// ── Formato PRESUPUESTO (botón COPIAR en el cotizador) ────────────────────────
 export const generatePresupuestoText = (
-    calc: { subtotal: number; anticipo: number; itemsText: string; planStats: any[] }
+    calc: { subtotal: number; anticipo: number; itemsText: string; planStats: any[] },
 ): string => {
     if (calc.subtotal === 0) return "";
 
@@ -96,36 +94,36 @@ export const generatePresupuestoText = (
         });
     }
     lines.push("");
-    lines.push("OPCIONES DE FINANCIACIÓN:");
+    lines.push("OPCIONES DE FINANCIACION:");
     lines.push("");
 
     for (const p of calc.planStats) {
         if (p.semanas === 0) {
-            lines.push(`* CONTADO`);
-            lines.push(`  Un pago de $ ${formatARS(p.calcTotal)}`);
+            lines.push("* CONTADO");
+            lines.push(`  UN PAGO DE $ ${formatARS(p.calcTotal)}`);
         } else {
             lines.push(`* ${p.semanas} SEMANAS`);
             if (p.primeraCuotaPaga) {
-                lines.push(`  Quedan ${p.cuotasPendientes} cuotas de $ ${formatARS(p.cuota)}`);
-                lines.push(`  Saldo restante: $ ${formatARS(p.saldo)}`);
+                lines.push(`  QUEDAN ${p.cuotasPendientes} CUOTAS DE $ ${formatARS(p.cuota)}`);
+                lines.push(`  SALDO RESTANTE: $ ${formatARS(p.saldo)}`);
             } else {
-                lines.push(`  ${p.semanas} semanas de $ ${formatARS(p.cuota)}`);
+                lines.push(`  ${p.semanas} SEMANAS DE $ ${formatARS(p.cuota)}`);
             }
         }
         lines.push("");
     }
 
     lines.push("____________");
-    lines.push(`Fecha: ${todayStr()} - Precios sujetos a modificación sin previo aviso.`);
+    lines.push(`FECHA: ${todayStr()} - PRECIOS SUJETOS A MODIFICACION SIN PREVIO AVISO.`);
 
     return lines.join("\n");
 };
 
-// ── Formato NOTA DE PEDIDO (botón WhatsApp / Copiar en la ficha) ───────────────
 export const generateNotaPedidoText = (
     calc: { subtotal: number; anticipo: number; itemsText: string; planStats: any[] },
     opts: {
         vendedor: string;
+        vendedorTelefono: string;
         zona: string;
         cliente: string;
         nroCliente: string;
@@ -139,69 +137,85 @@ export const generateNotaPedidoText = (
         conyugue?: string;
         dniConyugue?: string;
         telConyugue?: string;
-    }
+        specialFinancing?: {
+            semanas: number;
+            monto: number;
+        };
+    },
 ): string => {
-    const sep = "----------------------------";
-    const plan = calc.planStats.find(p => p.id === opts.selectedPlanId);
+    const upper = (value: string | null | undefined): string =>
+        String(value ?? "").trim().toUpperCase();
+    const sep = "========================================";
+    const line = (label: string, value: string): string =>
+        `${label.padEnd(18, " ")}: ${upper(value) || "-"}`;
+
+    const specialWeeks = Math.max(0, Number(opts.specialFinancing?.semanas) || 0);
+    const specialAmount = Math.max(0, Number(opts.specialFinancing?.monto) || 0);
+    const hasSpecialFinancing = specialWeeks > 0 && specialAmount > 0;
+
+    const plan = calc.planStats.find((p) => String(p.id) === String(opts.selectedPlanId));
     const productLines = splitItemsLines(calc.itemsText);
-    const productSection = productLines.length <= 1
-        ? [`>> PRODUCTO : ${productLines[0] ?? ""}`]
-        : [
-            ">> PRODUCTOS :",
-            ...productLines.map((line) => `    - ${line}`),
-        ];
+    const firstProductLine = productLines[0] ?? (hasSpecialFinancing ? "FINANCIACION ESPECIAL" : "");
+    const productSection =
+        productLines.length <= 1
+            ? [line("PRODUCTO", firstProductLine)]
+            : [`${"PRODUCTOS".padEnd(18, " ")}:`, ...productLines.map((item) => `  - ${upper(item)}`)];
 
     let planLine = "";
     let totalLine = "";
-    if (plan) {
+    if (hasSpecialFinancing) {
+        planLine = `FINANCIACION ESPECIAL (${specialWeeks} SEMANAS DE $${formatARS(specialAmount)})`;
+        totalLine = formatARS(specialWeeks * specialAmount);
+    } else if (plan) {
         if (plan.semanas === 0) {
-            planLine = `CONTADO (1 pago de $${formatARS(plan.calcTotal)})`;
+            planLine = `CONTADO (1 PAGO DE $${formatARS(plan.calcTotal)})`;
             totalLine = formatARS(plan.calcTotal);
+        } else if (plan.primeraCuotaPaga) {
+            planLine = `${plan.semanas} SEMANAS (${plan.cuotasPendientes} DE $${formatARS(plan.cuota)})`;
+            totalLine = formatARS(plan.saldo);
         } else {
-            if (plan.primeraCuotaPaga) {
-                planLine = `${plan.semanas} SEMANAS (${plan.cuotasPendientes} de $${formatARS(plan.cuota)})`;
-                totalLine = formatARS(plan.saldo);
-            } else {
-                planLine = `${plan.semanas} SEMANAS (${plan.semanas} de $${formatARS(plan.cuota)})`;
-                totalLine = formatARS(plan.calcTotal);
-            }
+            planLine = `${plan.semanas} SEMANAS (${plan.semanas} DE $${formatARS(plan.cuota)})`;
+            totalLine = formatARS(plan.calcTotal);
         }
     }
 
-    const nroStr = opts.nroCliente ? ` [CLIENTE Nº: ${opts.nroCliente}]` : "";
+    const nroStr = opts.nroCliente ? ` [CODIGO: ${upper(opts.nroCliente)}]` : "";
 
     const conyugueLines = opts.conyugue?.trim()
         ? [
-            sep,
-            `[ CONYUGE / CO-TITULAR ]`,
-            `Nombre : ${opts.conyugue}`,
-            opts.dniConyugue?.trim() ? `DNI : ${opts.dniConyugue}` : "",
-            opts.telConyugue?.trim() ? `TEL : ${opts.telConyugue}` : "",
+              sep,
+              "[ CONYUGE / CO-TITULAR ]",
+              line("NOMBRE", opts.conyugue),
+              opts.dniConyugue?.trim() ? line("DNI", opts.dniConyugue) : "",
+              opts.telConyugue?.trim() ? line("TELEFONO", opts.telConyugue) : "",
           ].filter(Boolean)
         : [];
 
     return [
-        `* NOTA DE PEDIDO - LUNAS 2026`,
-        `* RESERVA Y AUTORIZACION ZONA ${opts.zona.toUpperCase()}`,
+        "* NOTA DE PEDIDO - LUNAS 2026",
+        `* RESERVA Y AUTORIZACION ZONA ${upper(opts.zona)}`,
         sep,
-        ` VEND : ${opts.vendedor.toUpperCase()}`,
-        ` ZONA : ${opts.zona.toUpperCase()}`,
+        line("VENDEDOR", opts.vendedor),
+        line("TEL. VENDEDOR", opts.vendedorTelefono),
+        line("ZONA", opts.zona),
         sep,
-        `[ CLIENTE ]`,
-        `Nombre : ${opts.cliente}${nroStr}`,
-        `DNI : ${opts.dni}`,
-        `TEL : ${opts.telefono}`,
-        `LOC : ${opts.localidad}`,
-        `RUBRO : ${opts.rubro}`,
-        `DOM. COM : ${opts.domCom}`,
-        `DOM. PAR : ${opts.domPar}`,
+        "[ CLIENTE ]",
+        line("NOMBRE", `${upper(opts.cliente)}${nroStr}`),
+        line("DNI", opts.dni),
+        line("TELEFONO", opts.telefono),
+        line("LOCALIDAD", opts.localidad),
+        line("RUBRO", opts.rubro),
+        line("DOM. COMERCIAL", opts.domCom),
+        line("DOM. PARTICULAR", opts.domPar),
         ...conyugueLines,
         sep,
         ...productSection,
-        `    PLAN : ${planLine}`,
-        `    TOTAL VENTA (FINAL) : $${totalLine}`,
-        ``,
-        `ANTICIPO : $ ${calc.anticipo > 0 ? formatARS(calc.anticipo) : ""}`,
+        line("PLAN", planLine),
+        line("TOTAL VENTA", `$${totalLine || "0"}`),
+        line("ANTICIPO", calc.anticipo > 0 ? `$${formatARS(calc.anticipo)}` : "$0"),
+        "",
         todayStr(),
-    ].filter(Boolean).join("\n");
+    ]
+        .filter(Boolean)
+        .join("\n");
 };

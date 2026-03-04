@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import PwaRegister from "./PwaRegister";
+import VersionGuard from "./VersionGuard";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -53,6 +54,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-slate-900 text-slate-200 min-h-screen relative`}
       >
         <PwaRegister />
+        <VersionGuard />
         <div className="fixed inset-0 z-[-1] bg-[url('https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&q=80')] bg-cover bg-center opacity-10 mix-blend-overlay"></div>
         <div className="fixed inset-0 z-[-2] bg-slate-950"></div>
         {children}

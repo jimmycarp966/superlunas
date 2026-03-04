@@ -167,15 +167,16 @@ function CotizadorCol({ products, plans, settings, onFicha, mode = "single" }: C
     const calc = useMemo(() => {
         const manualDesc = manualDescription.trim();
         const manualUnitPrice = Number(manualPrice) || 0;
+        const hasManualValue = manualUnitPrice > 0;
         const subtotal = mode === "cart"
             ? cartItems.reduce((acc, item) => acc + item.precio * item.qty, 0)
             : mode === "manual"
-                ? (manualDesc && manualUnitPrice > 0 ? manualUnitPrice * qty : 0)
+                ? (hasManualValue ? manualUnitPrice * qty : 0)
                 : (Number(product?.precio) || 0) * qty;
         const itemsText = mode === "cart"
             ? cartItems.map((item) => `${item.qty}x [${item.codigo}] ${item.nombre}`).join("\n")
             : mode === "manual"
-                ? (manualDesc && manualUnitPrice > 0 ? `${qty}x ${manualDesc}` : "")
+                ? (hasManualValue ? `${qty}x ${manualDesc || "FINANCIACION ESPECIAL"}` : "")
                 : product
                     ? (qty > 1 ? `${qty}x ` : "") + `[${product.codigo}] ${product.nombre}`
                     : "";
@@ -284,7 +285,7 @@ function CotizadorCol({ products, plans, settings, onFicha, mode = "single" }: C
                 <>
                     <input
                         type="text"
-                        placeholder="Descripcion"
+                        placeholder="Descripcion (opcional)"
                         value={manualDescription}
                         onChange={(e) => setManualDescription(e.target.value)}
                         className="w-full bg-[#0d1522] border border-[#f0a12e] rounded-lg px-3 py-2 text-white text-sm sm:text-base font-bold placeholder-gray-500 focus:outline-none"
@@ -466,7 +467,7 @@ function CotizadorCol({ products, plans, settings, onFicha, mode = "single" }: C
                 manualDescription.trim() || manualPrice > 0 ? (
                     <div className="bg-[#0f1724] border border-[#f0a12e] rounded-lg px-3 py-2.5">
                         <div className="text-white font-black text-[15px] sm:text-[19px] leading-tight uppercase">
-                            {manualDescription.trim() || "Sin descripcion"}
+                            {manualDescription.trim() || "FINANCIACION ESPECIAL"}
                         </div>
                         <div className="text-[#ffc64f] font-extrabold text-[30px] sm:text-[40px] leading-none mt-1">
                             ${formatARS(calc.subtotal)}
@@ -477,7 +478,7 @@ function CotizadorCol({ products, plans, settings, onFicha, mode = "single" }: C
                     </div>
                 ) : (
                     <div className="bg-[#101827] border border-[#2d3b4f] rounded-lg px-3 py-4 text-center text-white/45 font-semibold text-sm">
-                        Carga descripcion y precio
+                        Carga precio para calcular financiacion
                     </div>
                 )
             ) : product ? (

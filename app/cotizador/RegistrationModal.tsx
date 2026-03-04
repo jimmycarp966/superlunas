@@ -53,7 +53,11 @@ const emptyForm = (): FormState => ({
 export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
     const [form, setForm] = useState<FormState>(emptyForm());
     const [vendedor, setVendedor] = useState("");
+    const [vendedorTelefono, setVendedorTelefono] = useState("");
     const [selectedPlanId, setSelectedPlanId] = useState<string>("");
+    const [financingMode, setFinancingMode] = useState<"plan" | "especial">("plan");
+    const [specialWeeksInput, setSpecialWeeksInput] = useState("");
+    const [specialAmountInput, setSpecialAmountInput] = useState("");
     const [fichaText, setFichaText] = useState("");
     const [clients, setClients] = useState<ClientRecord[]>([]);
     const [clientSearch, setClientSearch] = useState("");
@@ -94,11 +98,15 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
     }, [calc.anticipo]);
 
     const anticipoFinal = getAnticipoFinal(selectedPlan);
+    const specialWeeks = Math.max(0, parseInt(specialWeeksInput, 10) || 0);
+    const specialAmount = Math.max(0, parseInt(specialAmountInput, 10) || 0);
+    const isSpecialFinancing = financingMode === "especial";
 
     useEffect(() => {
-        const calcForText = { ...calc, anticipo: anticipoFinal };
+        const calcForText = { ...calc, anticipo: isSpecialFinancing ? 0 : anticipoFinal };
         setFichaText(generateNotaPedidoText(calcForText, {
             vendedor,
+            vendedorTelefono,
             zona: form.zona,
             cliente: form.cliente,
             nroCliente: form.nroCliente,
@@ -112,12 +120,29 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
             conyugue: form.conyugue,
             dniConyugue: form.dniConyugue,
             telConyugue: form.telConyugue,
+            specialFinancing: isSpecialFinancing
+                ? { semanas: specialWeeks, monto: specialAmount }
+                : undefined,
         }));
-    }, [calc, anticipoFinal, form, vendedor, selectedPlanId]);
+    }, [
+        calc,
+        anticipoFinal,
+        form,
+        vendedor,
+        vendedorTelefono,
+        selectedPlanId,
+        isSpecialFinancing,
+        specialWeeks,
+        specialAmount,
+    ]);
 
     const resetFichaState = useCallback(() => {
         setForm(emptyForm());
         setVendedor("");
+        setVendedorTelefono("");
+        setFinancingMode("plan");
+        setSpecialWeeksInput("");
+        setSpecialAmountInput("");
         setClientSearch("");
         setShowDropdown(false);
         setSubmitError("");
@@ -154,25 +179,25 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
     const selectClient = (c: ClientRecord) => {
         setForm(prev => ({
             ...prev,
-            cliente: c.nombre,
-            nroCliente: c.nroCliente,
-            dni: c.dni,
-            telefono: c.telefono,
-            localidad: c.localidad,
-            rubro: c.rubro,
-            domCom: c.domCom,
-            domPar: c.domPar,
-            zona: c.zona,
-            conyugue: c.conyugue,
-            dniConyugue: c.dniConyugue,
-            telConyugue: c.telConyugue,
+            cliente: String(c.nombre || "").toUpperCase(),
+            nroCliente: String(c.nroCliente || "").toUpperCase(),
+            dni: String(c.dni || "").toUpperCase(),
+            telefono: String(c.telefono || "").toUpperCase(),
+            localidad: String(c.localidad || "").toUpperCase(),
+            rubro: String(c.rubro || "").toUpperCase(),
+            domCom: String(c.domCom || "").toUpperCase(),
+            domPar: String(c.domPar || "").toUpperCase(),
+            zona: String(c.zona || "").toUpperCase(),
+            conyugue: String(c.conyugue || "").toUpperCase(),
+            dniConyugue: String(c.dniConyugue || "").toUpperCase(),
+            telConyugue: String(c.telConyugue || "").toUpperCase(),
         }));
-        setClientSearch(c.nombre);
+        setClientSearch(String(c.nombre || "").toUpperCase());
         setShowDropdown(false);
     };
 
     const setField = (field: keyof FormState, value: string) => {
-        setForm(prev => ({ ...prev, [field]: value }));
+        setForm(prev => ({ ...prev, [field]: value.toUpperCase() }));
     };
 
     const handleClientInput = (value: string) => {
@@ -183,7 +208,14 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
 
     const getMissingRequiredFields = useCallback((): string[] => {
         const missing: string[] = [];
+        if (isSpecialFinancing) {
+            if (specialWeeks <= 0) missing.push("Semanas");
+            if (specialAmount <= 0) missing.push("Monto semanal");
+            return missing;
+        }
+
         if (!vendedor.trim()) missing.push("Vendedor");
+        if (!vendedorTelefono.trim()) missing.push("Tel. Vendedor");
         if (!form.cliente.trim()) missing.push("Cliente");
         if (!form.dni.trim()) missing.push("DNI");
         if (!form.telefono.trim()) missing.push("Telefono");
@@ -197,7 +229,7 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
         if (!form.telConyugue.trim()) missing.push("Tel. conyuge");
         if (!String(selectedPlanId || "").trim()) missing.push("Plan de pago");
         return missing;
-    }, [vendedor, form, selectedPlanId]);
+    }, [isSpecialFinancing, specialWeeks, specialAmount, vendedor, vendedorTelefono, form, selectedPlanId]);
 
     const buildRegistrationBody = useCallback(() => {
         const planText = selectedPlan ? planToText(selectedPlan) : "";
@@ -207,6 +239,7 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
 
         return {
             vendedor,
+            vendedorTelefono,
             zona: form.zona,
             cliente: form.cliente,
             nroCliente: form.nroCliente,
@@ -225,7 +258,7 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
             telConyugue: form.telConyugue,
             observaciones: form.observaciones,
         };
-    }, [selectedPlan, vendedor, form, calc.itemsText, anticipoFinal]);
+    }, [selectedPlan, vendedor, vendedorTelefono, form, calc.itemsText, anticipoFinal]);
 
     const saveRegistration = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
         const missing = getMissingRequiredFields();
@@ -259,6 +292,21 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
     }, [getMissingRequiredFields, buildRegistrationBody]);
 
     const handleWhatsAppSend = async () => {
+        if (isSpecialFinancing) {
+            const missing = getMissingRequiredFields();
+            if (missing.length > 0) {
+                setSubmitError(`Completa los campos obligatorios: ${missing.join(", ")}.`);
+                return;
+            }
+
+            setSubmitError("");
+            const waUrl = `https://wa.me/?text=${encodeURIComponent(fichaText)}`;
+            window.open(waUrl, "_blank");
+            resetFichaState();
+            onClose();
+            return;
+        }
+
         const waUrl = `https://wa.me/?text=${encodeURIComponent(fichaText)}`;
         const waWindow = window.open("", "_blank");
         const result = await saveRegistration();
@@ -307,9 +355,15 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
                     <div className="flex-1 lg:overflow-y-auto p-4 sm:p-5 space-y-3 border-b border-neutral-800 lg:border-b-0 lg:border-r">
 
                         {/* Vendedor */}
-                        <div>
-                            <label className="text-xs text-neutral-500 mb-1 block">Vendedor <span className="text-red-400">*</span></label>
-                            <input type="text" value={vendedor} onChange={e => setVendedor(e.target.value.toUpperCase())} placeholder="Nombre del vendedor..." className={inp} />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label className="text-xs text-neutral-500 mb-1 block">Vendedor <span className="text-red-400">*</span></label>
+                                <input type="text" value={vendedor} onChange={e => setVendedor(e.target.value.toUpperCase())} placeholder="Nombre del vendedor..." className={inp} />
+                            </div>
+                            <div>
+                                <label className="text-xs text-neutral-500 mb-1 block">Tel. Vendedor <span className="text-red-400">*</span></label>
+                                <input type="text" value={vendedorTelefono} onChange={e => setVendedorTelefono(e.target.value.toUpperCase())} placeholder="Telefono del vendedor..." className={inp} />
+                            </div>
                         </div>
 
                         {/* Cliente */}
@@ -403,7 +457,9 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
                         </div>
 
                         <p className="text-[11px] text-neutral-500">
-                            El registro y el cliente se guardan automaticamente al enviar por WhatsApp.
+                            {isSpecialFinancing
+                                ? "Modo financiacion especial: solo se comparte por WhatsApp (sin guardar registro)."
+                                : "El registro y el cliente se guardan automaticamente al enviar por WhatsApp."}
                         </p>
                     </div>
 
@@ -412,24 +468,85 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
 
                         {/* Plan */}
                         <div>
-                            <p className="text-xs text-neutral-500 mb-2 font-medium uppercase tracking-wide">Plan de pago</p>
-                            <div className="space-y-2">
-                                {calc.planStats.map(p => (
-                                    <label key={p.id} className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${String(selectedPlanId) === String(p.id) ? "border-indigo-500 bg-indigo-500/10" : "border-neutral-700 bg-neutral-800 hover:border-neutral-600"}`}>
-                                        <input type="radio" name="plan" value={p.id} checked={String(selectedPlanId) === String(p.id)} onChange={() => setSelectedPlanId(String(p.id))} className="mt-0.5 accent-indigo-500" />
-                                        <div className="flex-1 min-w-0">
-                                            <div className="text-sm text-white font-medium">{p.nombre}</div>
-                                            {p.semanas === 0
-                                                ? <div className="text-emerald-400 text-xs font-semibold">$ {formatARS(p.calcTotal)}</div>
-                                                : p.primeraCuotaPaga
-                                                    ? <div className="text-xs text-neutral-400">1ra paga + {p.cuotasPendientes} x <span className="text-emerald-400 font-semibold">$ {formatARS(p.cuota)}</span><span className="text-neutral-500"> - saldo $ {formatARS(p.saldo)}</span></div>
-                                                    : <div className="text-xs text-neutral-400">{p.semanas} x <span className="text-emerald-400 font-semibold">$ {formatARS(p.cuota)}</span><span className="text-neutral-500"> = $ {formatARS(p.calcTotal)}</span></div>
-                                            }
-                                            {p.badge && <span className="text-xs bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded-full">{p.badge}</span>}
-                                        </div>
-                                    </label>
-                                ))}
+                            <p className="text-xs text-neutral-500 mb-2 font-medium uppercase tracking-wide">Financiacion</p>
+                            <div className="grid grid-cols-2 gap-2 mb-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setFinancingMode("plan")}
+                                    className={`px-2.5 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wide border transition-colors ${
+                                        !isSpecialFinancing
+                                            ? "bg-indigo-500/20 border-indigo-500/50 text-indigo-200"
+                                            : "bg-neutral-800 border-neutral-700 text-neutral-300 hover:bg-neutral-700"
+                                    }`}
+                                >
+                                    Plan normal
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setFinancingMode("especial")}
+                                    className={`px-2.5 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wide border transition-colors ${
+                                        isSpecialFinancing
+                                            ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-200"
+                                            : "bg-neutral-800 border-neutral-700 text-neutral-300 hover:bg-neutral-700"
+                                    }`}
+                                >
+                                    Especial
+                                </button>
                             </div>
+
+                            {isSpecialFinancing ? (
+                                <div className="space-y-2.5 bg-neutral-800 border border-neutral-700 rounded-xl p-3">
+                                    <div>
+                                        <label className="text-[11px] text-neutral-400 mb-1 block uppercase tracking-wide">
+                                            Semanas <span className="text-red-400">*</span>
+                                        </label>
+                                        <input
+                                            type="number"
+                                            min={1}
+                                            value={specialWeeksInput}
+                                            onChange={(e) => setSpecialWeeksInput(String(Math.max(0, parseInt(e.target.value, 10) || 0)))}
+                                            className={inp}
+                                            placeholder="Ej: 12"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[11px] text-neutral-400 mb-1 block uppercase tracking-wide">
+                                            Monto semanal <span className="text-red-400">*</span>
+                                        </label>
+                                        <input
+                                            type="number"
+                                            min={1}
+                                            value={specialAmountInput}
+                                            onChange={(e) => setSpecialAmountInput(String(Math.max(0, parseInt(e.target.value, 10) || 0)))}
+                                            className={inp}
+                                            placeholder="Ej: 45000"
+                                        />
+                                    </div>
+                                    {specialWeeks > 0 && specialAmount > 0 && (
+                                        <p className="text-[11px] text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-2.5 py-2">
+                                            Total estimado: $ {formatARS(specialWeeks * specialAmount)}
+                                        </p>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="space-y-2">
+                                    {calc.planStats.map(p => (
+                                        <label key={p.id} className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${String(selectedPlanId) === String(p.id) ? "border-indigo-500 bg-indigo-500/10" : "border-neutral-700 bg-neutral-800 hover:border-neutral-600"}`}>
+                                            <input type="radio" name="plan" value={p.id} checked={String(selectedPlanId) === String(p.id)} onChange={() => setSelectedPlanId(String(p.id))} className="mt-0.5 accent-indigo-500" />
+                                            <div className="flex-1 min-w-0">
+                                                <div className="text-sm text-white font-medium">{p.nombre}</div>
+                                                {p.semanas === 0
+                                                    ? <div className="text-emerald-400 text-xs font-semibold">$ {formatARS(p.calcTotal)}</div>
+                                                    : p.primeraCuotaPaga
+                                                        ? <div className="text-xs text-neutral-400">1ra paga + {p.cuotasPendientes} x <span className="text-emerald-400 font-semibold">$ {formatARS(p.cuota)}</span><span className="text-neutral-500"> - saldo $ {formatARS(p.saldo)}</span></div>
+                                                        : <div className="text-xs text-neutral-400">{p.semanas} x <span className="text-emerald-400 font-semibold">$ {formatARS(p.cuota)}</span><span className="text-neutral-500"> = $ {formatARS(p.calcTotal)}</span></div>
+                                                }
+                                                {p.badge && <span className="text-xs bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded-full">{p.badge}</span>}
+                                            </div>
+                                        </label>
+                                    ))}
+                                </div>
+                            )}
                         </div>
 
                         {/* Preview */}
@@ -438,7 +555,7 @@ export default function RegistrationModal({ calc, colLabel, onClose }: Props) {
                             <textarea
                                 value={fichaText}
                                 onChange={e => setFichaText(e.target.value)}
-                                className="flex-1 min-h-[200px] bg-neutral-800 border border-neutral-700 rounded-xl p-3 text-xs text-neutral-300 focus:outline-none focus:border-indigo-500 resize-none font-mono"
+                                className="flex-1 min-h-[200px] bg-neutral-800 border border-neutral-700 rounded-xl p-3 text-[14px] leading-6 text-neutral-200 focus:outline-none focus:border-indigo-500 resize-none font-mono"
                             />
                             <div className="flex gap-2">
                                 <button
