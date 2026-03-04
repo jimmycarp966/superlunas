@@ -29,6 +29,9 @@ const getBuildId = async (): Promise<{ buildId: string; filePath: string } | nul
 };
 
 const getBuildDeployedAt = async (filePath: string): Promise<string | null> => {
+    const buildTimeFromConfig = String(process.env.NEXT_PUBLIC_BUILD_TIME_ISO ?? "").trim();
+    if (buildTimeFromConfig) return buildTimeFromConfig;
+
     if (cachedBuildDeployedAtIso) return cachedBuildDeployedAtIso;
     try {
         const info = await stat(filePath);
