@@ -73,32 +73,102 @@ const pickBestPriceCandidate = (
     return { index: pool[0].index, text: pool[0].text };
 };
 
-const parseExcelBuffer = (buffer: Buffer): Product[] => {
+const normalizeColumnKey = (key: string): string => {
+    return key
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-zA-Z0-9]/g, "")
+        .toLowerCase();
+};
+
+const normalizeExcelRow = (row: Record<string, unknown>): Record<string, unknown> => {
+    const normalized: Record<string, unknown> = {};
+
+    for (const [key, value] of Object.entries(row)) {
+        const normalizedKey = normalizeColumnKey(String(key));
+        if (!normalizedKey || normalized[normalizedKey] !== undefined) continue;
+        normalized[normalizedKey] = value;
+    }
+
+    return normalized;
+};
+
+const hasExcelPriceValue = (value: unknown): boolean => {
+    const rawValue = String(value ?? "").trim();
+    return rawValue !== "" && extractNumericToken(rawValue) !== null;
+};
+
+const parseHeaderedExcelRows = (rows: Record<string, unknown>[]): Product[] => {
+    return rows.map((row) => {
+        const normalizedRow = normalizeExcelRow(row);
+
+        return {
+            codigo: String(normalizedRow.codigo ?? "").trim(),
+            nombre: String(normalizedRow.nombre ?? normalizedRow.descripcion ?? "").trim(),
+            precio: normalizePrice(String(normalizedRow.precio ?? "0")),
+            stock: (() => {
+                const parsed = Number(normalizedRow.stock);
+                return Number.isFinite(parsed) ? parsed : 100;
+            })(),
+            lista: String(normalizedRow.lista ?? "local").trim().toLowerCase(),
+            color: normalizedRow.color ? String(normalizedRow.color) : null,
+            tamano: normalizedRow.tamano ? String(normalizedRow.tamano) : normalizedRow.talle ? String(normalizedRow.talle) : null,
+            modelo: normalizedRow.modelo ? String(normalizedRow.modelo) : null,
+            garantiaMeses: (() => {
+                const value = Number(normalizedRow.garantiameses);
+                return Number.isFinite(value) ? value : null;
+            })(),
+            requiereSerie: Boolean(normalizedRow.requiereserie ?? false),
+            numeroSerie: normalizedRow.numeroserie ? String(normalizedRow.numeroserie) : null,
+            imagenUrl: normalizedRow.imagenurl ? String(normalizedRow.imagenurl) : normalizedRow.imagen ? String(normalizedRow.imagen) : normalizedRow.foto ? String(normalizedRow.foto) : null,
+        };
+    }).filter(product => product.codigo !== "");
+};
+
+const parseHeaderlessExcelRows = (rows: unknown[][]): Product[] => {
+    const products: Product[] = [];
+
+    for (const row of rows) {
+        const codigo = String(row[0] ?? "").trim();
+        const nombre = String(row[1] ?? "").trim();
+        const rawPrecio = row[2];
+
+        if (!codigo || !nombre || !hasExcelPriceValue(rawPrecio)) continue;
+
+        const parsedStock = parseStockToken(String(row[3] ?? "").trim());
+
+        products.push({
+            codigo,
+            nombre,
+            precio: normalizePrice(String(rawPrecio ?? "0")),
+            stock: parsedStock ?? 100,
+            lista: "local",
+            color: null,
+            tamano: null,
+            modelo: null,
+            garantiaMeses: null,
+            requiereSerie: false,
+            numeroSerie: null,
+            imagenUrl: null,
+        });
+    }
+
+    return products;
+};
+
+export const parseExcelBuffer = (buffer: Buffer): Product[] => {
     const workbook = xlsx.read(buffer, { type: "buffer" });
     const sheetName = workbook.SheetNames[0];
     const sheet = workbook.Sheets[sheetName];
-    const rawRows = xlsx.utils.sheet_to_json(sheet) as any[];
+    const rawRows = xlsx.utils.sheet_to_json(sheet, { defval: "" }) as Record<string, unknown>[];
+    const parsedWithHeaders = parseHeaderedExcelRows(rawRows);
 
-    return rawRows.map((row) => ({
-        codigo: String(row.codigo || row.Codigo || "").trim(),
-        nombre: String(row.nombre || row.Nombre || row.descripcion || "").trim(),
-        precio: normalizePrice(String(row.precio ?? row.Precio ?? "0")),
-        stock: (() => {
-            const parsed = Number(row.stock ?? row.Stock);
-            return Number.isFinite(parsed) ? parsed : 100;
-        })(),
-        lista: String(row.lista || row.Lista || "local").trim().toLowerCase(),
-        color: row.color ? String(row.color) : row.Color ? String(row.Color) : null,
-        tamano: row.tamano ? String(row.tamano) : row.Tamano ? String(row.Tamano) : row.talle ? String(row.talle) : null,
-        modelo: row.modelo ? String(row.modelo) : row.Modelo ? String(row.Modelo) : null,
-        garantiaMeses: (() => {
-            const value = Number(row.garantia_meses ?? row.garantiaMeses ?? row.GarantiaMeses);
-            return Number.isFinite(value) ? value : null;
-        })(),
-        requiereSerie: Boolean(row.requiere_serie ?? row.requiereSerie ?? row.RequiereSerie ?? false),
-        numeroSerie: row.numero_serie ? String(row.numero_serie) : row.numeroSerie ? String(row.numeroSerie) : null,
-        imagenUrl: row.imagen_url ? String(row.imagen_url) : row.imagen ? String(row.imagen) : row.foto ? String(row.foto) : null,
-    })).filter(p => p.codigo !== "");
+    if (parsedWithHeaders.length > 0) {
+        return parsedWithHeaders;
+    }
+
+    const rowMatrix = xlsx.utils.sheet_to_json(sheet, { header: 1, defval: "" }) as unknown[][];
+    return parseHeaderlessExcelRows(rowMatrix);
 };
 
 const parsePdfBuffer = async (buffer: Buffer): Promise<Product[]> => {
@@ -470,4 +540,5 @@ export const loadFromBuffer = async (buffer: Buffer, type: "pdf" | "excel"): Pro
 
     return deduplicated.length;
 };
+
 
