@@ -81,93 +81,198 @@ const normalizeColumnKey = (key: string): string => {
         .toLowerCase();
 };
 
-const normalizeExcelRow = (row: Record<string, unknown>): Record<string, unknown> => {
-    const normalized: Record<string, unknown> = {};
-
-    for (const [key, value] of Object.entries(row)) {
-        const normalizedKey = normalizeColumnKey(String(key));
-        if (!normalizedKey || normalized[normalizedKey] !== undefined) continue;
-        normalized[normalizedKey] = value;
-    }
-
-    return normalized;
-};
-
 const hasExcelPriceValue = (value: unknown): boolean => {
     const rawValue = String(value ?? "").trim();
     return rawValue !== "" && extractNumericToken(rawValue) !== null;
 };
 
-const parseHeaderedExcelRows = (rows: Record<string, unknown>[]): Product[] => {
-    return rows.map((row) => {
-        const normalizedRow = normalizeExcelRow(row);
+type ExcelRowLayout = {
+    codigoIndex: number;
+    nombreIndex: number;
+    precioIndex: number;
+    stockIndex: number | null;
+    listaIndex: number | null;
+};
 
-        return {
-            codigo: String(normalizedRow.codigo ?? "").trim(),
-            nombre: String(normalizedRow.nombre ?? normalizedRow.descripcion ?? "").trim(),
-            precio: normalizePrice(String(normalizedRow.precio ?? "0")),
-            stock: (() => {
-                const parsed = Number(normalizedRow.stock);
-                return Number.isFinite(parsed) ? parsed : 100;
-            })(),
-            lista: String(normalizedRow.lista ?? "local").trim().toLowerCase(),
-            color: normalizedRow.color ? String(normalizedRow.color) : null,
-            tamano: normalizedRow.tamano ? String(normalizedRow.tamano) : normalizedRow.talle ? String(normalizedRow.talle) : null,
-            modelo: normalizedRow.modelo ? String(normalizedRow.modelo) : null,
-            garantiaMeses: (() => {
-                const value = Number(normalizedRow.garantiameses);
-                return Number.isFinite(value) ? value : null;
-            })(),
-            requiereSerie: Boolean(normalizedRow.requiereserie ?? false),
-            numeroSerie: normalizedRow.numeroserie ? String(normalizedRow.numeroserie) : null,
-            imagenUrl: normalizedRow.imagenurl ? String(normalizedRow.imagenurl) : normalizedRow.imagen ? String(normalizedRow.imagen) : normalizedRow.foto ? String(normalizedRow.foto) : null,
-        };
-    }).filter(product => product.codigo !== "");
+type ExcelHeaderLayout = ExcelRowLayout & {
+    headerRowIndex: number;
+};
+
+const parseExcelStockValue = (value: unknown, fallback = 100): number => {
+    const raw = String(value ?? "").trim();
+    if (raw === "") return fallback;
+
+    const sanitized = raw.replace(/[^\d-]/g, "");
+    if (sanitized === "" || sanitized === "-") return fallback;
+
+    const parsed = Number(sanitized);
+    return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const findExcelHeaderLayout = (rows: unknown[][]): ExcelHeaderLayout | null => {
+    for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+        const row = rows[rowIndex] ?? [];
+        let codigoIndex = -1;
+        let nombreIndex = -1;
+        let precioIndex = -1;
+        let stockIndex = -1;
+        let listaIndex = -1;
+
+        for (let colIndex = 0; colIndex < row.length; colIndex++) {
+            const token = normalizeColumnKey(String(row[colIndex] ?? ""));
+            if (!token) continue;
+
+            if (codigoIndex === -1 && (token === "codigo" || token === "cod" || token.startsWith("cod"))) {
+                codigoIndex = colIndex;
+            }
+
+            if (nombreIndex === -1 && (
+                token.includes("descripcion") ||
+                token.includes("descrip") ||
+                token.includes("nombre") ||
+                token.includes("detalle")
+            )) {
+                nombreIndex = colIndex;
+            }
+
+            if (precioIndex === -1 && (
+                token.includes("precio") ||
+                token.includes("importe") ||
+                token.includes("valor")
+            )) {
+                precioIndex = colIndex;
+            }
+
+            if (listaIndex === -1 && token === "lista") {
+                listaIndex = colIndex;
+            }
+
+            if (stockIndex === -1 && (
+                token.includes("stock") ||
+                token.includes("existenc") ||
+                token.includes("cantidad")
+            )) {
+                stockIndex = colIndex;
+            }
+        }
+
+        if (codigoIndex !== -1 && nombreIndex !== -1 && precioIndex !== -1) {
+            return {
+                headerRowIndex: rowIndex,
+                codigoIndex,
+                nombreIndex,
+                precioIndex,
+                stockIndex: stockIndex !== -1 ? stockIndex : null,
+                listaIndex: listaIndex !== -1 ? listaIndex : null,
+            };
+        }
+
+        if (codigoIndex !== -1 && nombreIndex !== -1 && precioIndex === -1 && listaIndex !== -1) {
+            const samples: unknown[] = [];
+            for (let sampleRowIndex = rowIndex + 1; sampleRowIndex < rows.length && samples.length < 5; sampleRowIndex++) {
+                const sampleValue = rows[sampleRowIndex]?.[listaIndex];
+                if (String(sampleValue ?? "").trim() === "") continue;
+                samples.push(sampleValue);
+            }
+
+            if (samples.length > 0 && samples.every(hasExcelPriceValue)) {
+                return {
+                    headerRowIndex: rowIndex,
+                    codigoIndex,
+                    nombreIndex,
+                    precioIndex: listaIndex,
+                    stockIndex: stockIndex !== -1 ? stockIndex : null,
+                    listaIndex: null,
+                };
+            }
+        }
+    }
+
+    return null;
+};
+
+const parseExcelRow = (
+    row: unknown[],
+    layout: ExcelRowLayout,
+): Product | null => {
+    const codigo = String(row[layout.codigoIndex] ?? "").trim();
+    const nombre = String(row[layout.nombreIndex] ?? "").trim();
+    const rawPrecio = row[layout.precioIndex];
+
+    if (!codigo || !nombre || !hasExcelPriceValue(rawPrecio)) return null;
+    if (!/^[a-zA-Z0-9-]{2,}$/.test(codigo)) return null;
+
+    return {
+        codigo,
+        nombre,
+        precio: normalizePrice(String(rawPrecio ?? "0")),
+        stock: layout.stockIndex !== null ? parseExcelStockValue(row[layout.stockIndex]) : 100,
+        lista: layout.listaIndex !== null
+            ? String(row[layout.listaIndex] ?? "local").trim().toLowerCase() || "local"
+            : "local",
+        color: null,
+        tamano: null,
+        modelo: null,
+        garantiaMeses: null,
+        requiereSerie: false,
+        numeroSerie: null,
+        imagenUrl: null,
+    };
+};
+
+const parseHeaderedExcelRows = (rows: unknown[][]): Product[] => {
+    const layout = findExcelHeaderLayout(rows);
+    if (!layout) return [];
+
+    const products: Product[] = [];
+    for (let rowIndex = layout.headerRowIndex + 1; rowIndex < rows.length; rowIndex++) {
+        const product = parseExcelRow(rows[rowIndex] ?? [], layout);
+        if (product) products.push(product);
+    }
+
+    return products;
 };
 
 const parseHeaderlessExcelRows = (rows: unknown[][]): Product[] => {
     const products: Product[] = [];
 
-    for (const row of rows) {
-        const codigo = String(row[0] ?? "").trim();
-        const nombre = String(row[1] ?? "").trim();
-        const rawPrecio = row[2];
+    // Fallback para listados sin encabezados: probamos varios desplazamientos comunes.
+    let bestProducts: Product[] = [];
 
-        if (!codigo || !nombre || !hasExcelPriceValue(rawPrecio)) continue;
+    for (let offset = 0; offset <= 5; offset++) {
+        const layout = {
+            codigoIndex: offset,
+            nombreIndex: offset + 1,
+            precioIndex: offset + 2,
+            stockIndex: offset + 3,
+            listaIndex: null,
+        };
 
-        const parsedStock = parseStockToken(String(row[3] ?? "").trim());
+        products.length = 0;
+        for (const row of rows) {
+            const product = parseExcelRow(row ?? [], layout);
+            if (product) products.push(product);
+        }
 
-        products.push({
-            codigo,
-            nombre,
-            precio: normalizePrice(String(rawPrecio ?? "0")),
-            stock: parsedStock ?? 100,
-            lista: "local",
-            color: null,
-            tamano: null,
-            modelo: null,
-            garantiaMeses: null,
-            requiereSerie: false,
-            numeroSerie: null,
-            imagenUrl: null,
-        });
+        if (products.length > bestProducts.length) {
+            bestProducts = [...products];
+        }
     }
 
-    return products;
+    return bestProducts;
 };
 
 export const parseExcelBuffer = (buffer: Buffer): Product[] => {
     const workbook = xlsx.read(buffer, { type: "buffer" });
     const sheetName = workbook.SheetNames[0];
     const sheet = workbook.Sheets[sheetName];
-    const rawRows = xlsx.utils.sheet_to_json(sheet, { defval: "" }) as Record<string, unknown>[];
-    const parsedWithHeaders = parseHeaderedExcelRows(rawRows);
+    const rowMatrix = xlsx.utils.sheet_to_json(sheet, { header: 1, defval: "" }) as unknown[][];
+    const parsedWithHeaders = parseHeaderedExcelRows(rowMatrix);
 
     if (parsedWithHeaders.length > 0) {
         return parsedWithHeaders;
     }
 
-    const rowMatrix = xlsx.utils.sheet_to_json(sheet, { header: 1, defval: "" }) as unknown[][];
     return parseHeaderlessExcelRows(rowMatrix);
 };
 
