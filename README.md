@@ -10,9 +10,9 @@ Clon 1:1 del cotizador de Google Apps Script construido en Next.js 15.
 1. `npm install`
 2. Configurar `.env.local`:
    ```env
-   VENDOR_PASSWORD=123456
-   ADMIN_PASSWORD=123456789
-   JWT_SECRET=super_secret_jwt_key_for_lunas_confort_99
+   VENDOR_PASSWORD=tu-clave-de-vendedor
+   ADMIN_PASSWORD=tu-clave-de-administrador
+   JWT_SECRET=replace-with-a-long-random-secret
    SOURCE_FILE_TYPE=pdf
    CACHE_TTL_SECONDS=600
    NEXT_PUBLIC_APP_NAME="Lunas Confort"
@@ -21,12 +21,14 @@ Clon 1:1 del cotizador de Google Apps Script construido en Next.js 15.
 4. Ir a `http://localhost:3000`.
 
 Roles:
-- **Vendedor:** ir a `/` e ingresar con la password `123456`.
-- **Administrador:** ir a `/config` e ingresar con la password `123456789`.
+- **Vendedor:** ir a `/` e ingresar con la clave definida en `.env.local`.
+- **Administrador:** ir a `/config` e ingresar con la clave definida en `.env.local`.
 
 ## Pruebas
 - **Unit Tests:** `npx vitest` (Comprueba cálculos de cuota, normalización de precios).
 - **Playwright E2E:** `npx playwright test` (Verifica flujo de login y renderizado de módulos).
+
+Las sesiones quedan ligadas al deployment actual: cuando publicas una nueva versión, los JWT anteriores dejan de ser válidos y todos vuelven al login.
 
 ---
 
