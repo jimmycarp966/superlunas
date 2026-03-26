@@ -102,4 +102,35 @@ describe("parseExcelBuffer", () => {
             stock: 0,
         }));
     });
+
+    it("incluye productos con codigos de un digito", () => {
+        const buffer = buildWorkbookBuffer([
+            ["Lista de Precios", "", "", "", "", "2026-03-21"],
+            ["", "", "", "", "", ""],
+            ["", "Codigo", "Descripcion", "LISTA", "Stock", ""],
+            ["", 3, "BALANZA COMERCIAL KRETZ CENIT 30KG PARA COLGAR", 1255473, "0.000", ""],
+            ["", 4, "BALANZA COMERCIAL SYSTEL PILON 600KG C/BATERIA Y GANCHO", 1782695, 1, ""],
+            ["", 1, "BALANZA ELECTRONICA KRETZ NOVEL ECO2 30KG C/BAT CONTADORA", 643200, 29, ""],
+        ]);
+
+        const products = parseExcelBuffer(buffer);
+
+        expect(products.map(product => product.codigo)).toEqual(["3", "4", "1"]);
+        expect(products[0]).toEqual(expect.objectContaining({
+            codigo: "3",
+            nombre: "BALANZA COMERCIAL KRETZ CENIT 30KG PARA COLGAR",
+            precio: 1255473,
+            stock: 0,
+        }));
+        expect(products[1]).toEqual(expect.objectContaining({
+            codigo: "4",
+            precio: 1782695,
+            stock: 1,
+        }));
+        expect(products[2]).toEqual(expect.objectContaining({
+            codigo: "1",
+            precio: 643200,
+            stock: 29,
+        }));
+    });
 });

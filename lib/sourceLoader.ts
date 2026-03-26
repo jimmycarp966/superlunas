@@ -86,6 +86,10 @@ const hasExcelPriceValue = (value: unknown): boolean => {
     return rawValue !== "" && extractNumericToken(rawValue) !== null;
 };
 
+const isValidProductCode = (codigo: string): boolean => {
+    return /^[a-zA-Z0-9][a-zA-Z0-9-]*$/.test(codigo);
+};
+
 type ExcelRowLayout = {
     codigoIndex: number;
     nombreIndex: number;
@@ -200,7 +204,7 @@ const parseExcelRow = (
     const rawPrecio = row[layout.precioIndex];
 
     if (!codigo || !nombre || !hasExcelPriceValue(rawPrecio)) return null;
-    if (!/^[a-zA-Z0-9-]{2,}$/.test(codigo)) return null;
+    if (!isValidProductCode(codigo)) return null;
 
     return {
         codigo,
@@ -374,7 +378,7 @@ const parsePdfBuffer = async (buffer: Buffer): Promise<Product[]> => {
                             }
                         }
 
-                        if (codigo && /^[a-zA-Z0-9-]{2,}$/.test(codigo) && nombre) {
+                        if (codigo && isValidProductCode(codigo) && nombre) {
                             products.push({
                                 codigo,
                                 nombre,
@@ -418,7 +422,7 @@ const parsePdfBuffer = async (buffer: Buffer): Promise<Product[]> => {
                         }
                         const nombre = items.slice(1, endNombre).map(i => i.text).join(" ").trim();
 
-                        if (/^[a-zA-Z0-9-]{3,}$/.test(codigo) && nombre) {
+                        if (isValidProductCode(codigo) && nombre) {
                             products.push({
                                 codigo,
                                 nombre,
