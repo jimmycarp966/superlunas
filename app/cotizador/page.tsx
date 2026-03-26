@@ -4,6 +4,7 @@
 import { useState, useEffect, useMemo, useCallback, useDeferredValue, useRef } from "react";
 import { ClipboardList, RotateCcw, Check } from "lucide-react";
 import { calcPlanStats, generatePresupuestoText, formatARS } from "./utils";
+import { searchProducts } from "./search";
 import RegistrationModal from "./RegistrationModal";
 
 const PLANS_SYNC_CHANNEL = "plans-updates";
@@ -153,15 +154,7 @@ function CotizadorCol({ products, plans, settings, onFicha, mode = "single" }: C
     }, [plans]);
 
     const filtered = useMemo(() => {
-        const q = deferredSearch.toLowerCase().trim();
-        if (!q) return products.slice(0, 100);
-        return products
-            .filter(
-                (p) =>
-                    p.nombre.toLowerCase().includes(q) ||
-                    p.codigo.toLowerCase().includes(q)
-            )
-            .slice(0, 100);
+        return searchProducts(products, deferredSearch, 100);
     }, [deferredSearch, products]);
 
     const calc = useMemo(() => {
