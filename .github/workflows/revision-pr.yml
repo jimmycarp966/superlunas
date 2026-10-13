@@ -1,0 +1,17 @@
+name: Revisión de PR
+
+# This unprivileged signal wakes the evaluator on the default branch. The
+# evaluator retrieves the real reviews itself; it never trusts this job's code.
+on:
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+
+permissions: {}
+
+jobs:
+  revision:
+    name: Avisar revisión
+    runs-on: ubuntu-24.04
+    timeout-minutes: 1
+    steps:
+      - run: echo 'Revisión recibida; la política verificará autor y commit.'

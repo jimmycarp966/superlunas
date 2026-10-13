@@ -1,0 +1,31 @@
+name: Controles para merge
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: controles-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  validar:
+    name: Validar PR
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Probar las reglas de revisión y aprobación
+        run: node --test .github/auto-merge/policy.test.mjs
+      - name: Verificar el cambio y sus controles técnicos
+        run: node .github/auto-merge/project-check.mjs

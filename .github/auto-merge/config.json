@@ -1,0 +1,38 @@
+{
+  "owner": "jimmycarp966",
+  "ownerId": 224327343,
+  "defaultBranch": "main",
+  "requiredWorkflows": [
+    {
+      "file": "controles-merge.yml",
+      "job": "Validar PR"
+    }
+  ],
+  "requiredStatuses": [
+    "Vercel"
+  ],
+  "postMergeWorkflows": [],
+  "releaseTests": [],
+  "releaseFiles": [],
+  "projectCheck": {
+    "install": [
+      "npm",
+      "ci",
+      "--ignore-scripts",
+      "--no-audit",
+      "--no-fund"
+    ],
+    "commands": [
+      [
+        "node",
+        "node_modules/next/dist/bin/next",
+        "typegen"
+      ],
+      [
+        "node",
+        "node_modules/typescript/bin/tsc",
+        "--noEmit"
+      ]
+    ]
+  }
+}
